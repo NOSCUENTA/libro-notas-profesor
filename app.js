@@ -443,13 +443,19 @@ class GradeBook {
         : `<span class="final-status ${final >= PASS_GRADE ? 'pass' : 'fail'}">${final >= PASS_GRADE ? 'APRO' : 'REPR'}</span>`
       : '';
 
+    const isRetired = !!st.retired;
     return `
-      <tr class="student-row" data-student="${st.id}">
+      <tr class="student-row${isRetired ? ' student-row-retired' : ''}" data-student="${st.id}">
         <td class="td-num">${idx + 1}</td>
         <td class="td-name">
           <div class="student-name-wrap">
-            <span class="student-name" title="${this._esc(st.name)}">${this._esc(st.name)}</span>
-            <button class="del-student-btn" data-action="del-student" data-student="${st.id}" title="Eliminar alumno">×</button>
+            <span class="student-name${isRetired ? ' name-retired' : ''}" title="${this._esc(st.name)}">${this._esc(st.name)}</span>
+            ${isRetired ? '<span class="retired-badge">Retirado</span>' : ''}
+            <div class="student-btn-group">
+              <button class="edit-student-btn" data-action="edit-student-name" data-student="${st.id}" title="Editar nombre">✎</button>
+              <button class="retire-student-btn" data-action="toggle-retire-student" data-student="${st.id}" title="${isRetired ? 'Reactivar alumno' : 'Marcar como retirado'}">${isRetired ? '↩' : '⊘'}</button>
+              <button class="del-student-btn" data-action="del-student" data-student="${st.id}" title="Eliminar alumno">×</button>
+            </div>
           </div>
         </td>
         ${mkCells('s1')}
@@ -705,6 +711,13 @@ class GradeBook {
         const lbl = el.closest('.obs-entry-header')?.querySelector('.obs-entry-date-label');
         if (lbl) lbl.textContent = this._fmtDateES(el.value);
       }
+
+    } else if (action === 'obs-filter') {
+      const q = el.value.toLowerCase().trim();
+      document.querySelectorAll('.obs-student-block').forEach(block => {
+        const name = block.querySelector('.obs-student-name')?.textContent.toLowerCase() || '';
+        block.style.display = (!q || name.includes(q)) ? '' : 'none';
+      });
     }
   }
 
@@ -735,6 +748,12 @@ class GradeBook {
 
     } else if (a === 'del-student') {
       this._confirmDeleteStudent(el.dataset.student);
+
+    } else if (a === 'edit-student-name') {
+      this._promptEditStudentName(el.dataset.student);
+
+    } else if (a === 'toggle-retire-student') {
+      this._toggleRetireStudent(el.dataset.student);
 
     } else if (a === 'add-eval') {
       this._promptAddEval(el.dataset.sem);
@@ -1020,26 +1039,40 @@ class GradeBook {
   // ── Actions ──────────────────────────────────────────────────────────────────
 
   _promptAddStudent() {
+    const { activeCourse: cId } = this.state;
+    const count = (this.state.students[cId] || []).length;
     this.showModal({
       title: 'Agregar Alumno',
       body: `
         <label class="modal-label">Nombre completo</label>
         <input type="text" id="m-input" class="modal-input" placeholder="Apellido Apellido, Nombre" autofocus>
-        <div class="modal-hint">Formato sugerido: <em>Apellido Apellido, Nombre</em></div>`,
+        <div class="modal-hint">Formato sugerido: <em>Apellido Apellido, Nombre</em></div>
+        <label class="modal-label" style="margin-top:12px">Posición en la lista</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="number" id="m-pos" class="modal-input" value="${count + 1}" min="1" max="${count + 1}" style="width:80px">
+          <span class="modal-hint" style="margin:0">de ${count + 1} (al final por defecto)</span>
+        </div>`,
       confirm: 'Agregar',
       onConfirm: () => {
         const name = document.getElementById('m-input').value.trim();
         if (!name) return;
-        this._addStudent(name);
+        const posInput = document.getElementById('m-pos');
+        const pos = posInput ? Math.max(0, parseInt(posInput.value || count + 1) - 1) : count;
+        this._addStudent(name, pos);
         this.hideModal();
       }
     });
   }
 
-  _addStudent(name) {
+  _addStudent(name, insertIdx) {
     const { activeCourse: cId, subjects } = this.state;
-    const id = `${cId}_st_${Date.now()}`;
-    this.state.students[cId].push({ id, name });
+    const id   = `${cId}_st_${Date.now()}`;
+    const list = this.state.students[cId];
+    if (insertIdx !== undefined && insertIdx >= 0 && insertIdx < list.length) {
+      list.splice(insertIdx, 0, { id, name });
+    } else {
+      list.push({ id, name });
+    }
     subjects.forEach(s => {
       if (!this.state.grades[cId][s.id]) this.state.grades[cId][s.id] = {};
       this.state.grades[cId][s.id][id] = { s1:{}, s2:{} };
@@ -1066,6 +1099,49 @@ class GradeBook {
         this.toast('Alumno eliminado');
       }
     });
+  }
+
+  _promptEditStudentName(studentId) {
+    const { activeCourse: cId } = this.state;
+    const st = this.state.students[cId]?.find(s => s.id === studentId);
+    if (!st) return;
+    this.showModal({
+      title: 'Editar nombre del alumno',
+      body: `
+        <label class="modal-label">Nombre completo</label>
+        <input type="text" id="m-input" class="modal-input" value="${this._esc(st.name)}" autofocus>
+        <div class="modal-hint">Formato sugerido: <em>Apellido Apellido, Nombre</em></div>`,
+      confirm: 'Guardar',
+      onConfirm: () => {
+        const name = document.getElementById('m-input').value.trim();
+        if (!name) { this.hideModal(); return; }
+        st.name = name;
+        this.save(); this.hideModal(); this.render();
+        this.toast('Nombre actualizado');
+      }
+    });
+  }
+
+  _toggleRetireStudent(studentId) {
+    const { activeCourse: cId } = this.state;
+    const st = this.state.students[cId]?.find(s => s.id === studentId);
+    if (!st) return;
+    if (st.retired) {
+      st.retired = false;
+      this.save(); this.render();
+      this.toast(`${st.name} reactivado`);
+    } else {
+      this.showModal({
+        title: 'Marcar como retirado',
+        body: `<p class="confirm-message">¿Marcar a <strong>${this._esc(st.name)}</strong> como retirado/a?<br>Sus calificaciones se conservarán y quedará marcado en la lista.</p>`,
+        confirm: 'Marcar retirado',
+        onConfirm: () => {
+          st.retired = true;
+          this.save(); this.hideModal(); this.render();
+          this.toast(`${st.name} marcado como retirado`);
+        }
+      });
+    }
   }
 
   _promptAddEval(sem) {
@@ -1605,6 +1681,10 @@ class GradeBook {
       </div>
       <div class="obs-hint-bar">
         Borrador privado para el libro de clases. Los cambios se guardan automáticamente. ${totalEntries} observación${totalEntries !== 1 ? 'es' : ''} registrada${totalEntries !== 1 ? 's' : ''}.
+      </div>
+      <div class="obs-search-bar">
+        <input type="text" class="obs-search-input" data-action="obs-filter"
+               placeholder="Buscar alumno por nombre...">
       </div>
       <div class="obs-body">${cards}</div>`;
   }
