@@ -714,9 +714,9 @@ class GradeBook {
 
     } else if (action === 'obs-filter') {
       const q = el.value.toLowerCase().trim();
-      document.querySelectorAll('.obs-student-block').forEach(block => {
-        const name = block.querySelector('.obs-student-name')?.textContent.toLowerCase() || '';
-        block.style.display = (!q || name.includes(q)) ? '' : 'none';
+      document.querySelectorAll('.obs-list-item').forEach(item => {
+        const name = item.querySelector('.obs-list-name')?.textContent.toLowerCase() || '';
+        item.style.display = (!q || name.includes(q)) ? '' : 'none';
       });
     }
   }
@@ -809,6 +809,14 @@ class GradeBook {
     } else if (a === 'export-taller') {
       this._exportTallerCSV();
 
+    } else if (a === 'select-obs-student') {
+      const stId = el.dataset.student;
+      this.state.obsSelectedStudent = stId;
+      document.querySelectorAll('.obs-list-item').forEach(item => {
+        item.classList.toggle('obs-list-item-active', item.dataset.student === stId);
+      });
+      this._refreshObsDetail(stId);
+
     } else if (a === 'toggle-obs-student') {
       const block = el.closest('.obs-student-block');
       if (block) block.classList.toggle('obs-open');
@@ -821,13 +829,11 @@ class GradeBook {
       const today = new Date().toISOString().slice(0, 10);
       const id    = `o_${Date.now()}`;
       this.state.observations[cId][stId].unshift({ id, date: today, content: '', createdAt: Date.now() });
-      this.save(); this.render();
+      this.save();
+      this._refreshObsDetail(stId);
       requestAnimationFrame(() => {
-        // Auto-expandir el bloque del alumno correspondiente
-        const block = document.querySelector(`.obs-student-block[data-student-block="${stId}"]`);
-        if (block) block.classList.add('obs-open');
         const ta = document.querySelector(`textarea[data-action="obs-text"][data-id="${id}"]`);
-        if (ta) ta.focus();
+        if (ta) { ta.focus(); ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
       });
 
     } else if (a === 'del-obs-entry') {
@@ -841,11 +847,8 @@ class GradeBook {
         onConfirm: () => {
           if (this.state.observations[cId]?.[stId])
             this.state.observations[cId][stId] = this.state.observations[cId][stId].filter(x => x.id !== entryId);
-          this.save(); this.hideModal(); this.render();
-          requestAnimationFrame(() => {
-            const block = document.querySelector(`.obs-student-block[data-student-block="${stId}"]`);
-            if (block) block.classList.add('obs-open');
-          });
+          this.save(); this.hideModal();
+          this._refreshObsDetail(stId);
         }
       });
 
@@ -1623,47 +1626,24 @@ class GradeBook {
         </div>`;
     }
 
+    // Inicializar alumno seleccionado si no hay uno válido
+    if (!this.state.obsSelectedStudent || !students.find(s => s.id === this.state.obsSelectedStudent)) {
+      this.state.obsSelectedStudent = students[0].id;
+    }
+
+    const selectedId   = this.state.obsSelectedStudent;
     const totalEntries = Object.values(obsMap).reduce((n, arr) => n + (Array.isArray(arr) ? arr.length : 0), 0);
 
-    const cards = students.map((st, idx) => {
-      const entries = [...(obsMap[st.id] || [])]
-        .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.createdAt - a.createdAt);
-      const count = entries.length;
-
-      const entryRows = entries.map(entry => `
-        <div class="obs-entry">
-          <div class="obs-entry-header">
-            <div class="obs-entry-date-wrap">
-              <input type="date" class="taller-date-input obs-date-input"
-                     data-action="obs-date" data-student="${st.id}" data-id="${entry.id}"
-                     value="${entry.date || today}" title="Cambiar fecha">
-              <span class="obs-entry-date-label">${this._esc(this._fmtDateES(entry.date))}</span>
-            </div>
-            <button class="taller-del-btn" data-action="del-obs-entry"
-                    data-student="${st.id}" data-id="${entry.id}" title="Eliminar observación">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            </button>
-          </div>
-          <textarea class="taller-textarea obs-textarea"
-                    data-action="obs-text" data-student="${st.id}" data-id="${entry.id}"
-                    placeholder="Escribe la observación..."
-                    rows="3">${this._esc(entry.content || '')}</textarea>
-        </div>`).join('');
-
+    const listItems = students.map((st, idx) => {
+      const count      = (obsMap[st.id] || []).length;
+      const isSelected = st.id === selectedId;
+      const isRetired  = !!st.retired;
       return `
-        <div class="obs-student-block" data-student-block="${st.id}">
-          <div class="obs-student-header" data-action="toggle-obs-student" title="Ver observaciones">
-            <div class="obs-student-id">
-              <span class="obs-chevron">▶</span>
-              <span class="obs-student-num">${idx + 1}</span>
-              <span class="obs-student-name">${this._esc(st.name)}</span>
-              ${count > 0 ? `<span class="obs-count-badge">${count} obs.</span>` : ''}
-            </div>
-            <button class="btn-obs-add" data-action="add-obs-entry" data-student="${st.id}" title="Nueva observación">
-              + Nueva observación
-            </button>
-          </div>
-          <div class="obs-entries">${entryRows}</div>
+        <div class="obs-list-item${isSelected ? ' obs-list-item-active' : ''}${isRetired ? ' obs-list-item-retired' : ''}"
+             data-action="select-obs-student" data-student="${st.id}">
+          <span class="obs-list-num">${idx + 1}</span>
+          <span class="obs-list-name${isRetired ? ' name-retired' : ''}" title="${this._esc(st.name)}">${this._esc(st.name)}</span>
+          ${count > 0 ? `<span class="obs-list-badge">${count}</span>` : ''}
         </div>`;
     }).join('');
 
@@ -1679,14 +1659,94 @@ class GradeBook {
           ${totalEntries > 0 ? `<button class="btn-add btn-add-secondary" data-action="export-obs">${this._icon('download')} Exportar</button>` : ''}
         </div>
       </div>
-      <div class="obs-hint-bar">
-        Borrador privado para el libro de clases. Los cambios se guardan automáticamente. ${totalEntries} observación${totalEntries !== 1 ? 'es' : ''} registrada${totalEntries !== 1 ? 's' : ''}.
+      <div class="obs-layout">
+        <div class="obs-left-panel">
+          <div class="obs-left-search">
+            <input type="text" class="obs-search-input" data-action="obs-filter"
+                   placeholder="Buscar alumno..." autocomplete="off">
+          </div>
+          <div class="obs-student-list" id="obs-student-list">
+            ${listItems}
+          </div>
+        </div>
+        <div class="obs-right-panel" id="obs-detail-panel">
+          ${this._renderObsDetail(selectedId, obsMap, today)}
+        </div>
+      </div>`;
+  }
+
+  _renderObsDetail(stId, obsMap, today) {
+    if (!stId) return `<div class="obs-detail-empty"><p>Selecciona un alumno.</p></div>`;
+    const cId = this.state.activeCourse;
+    const st  = (this.state.students[cId] || []).find(s => s.id === stId);
+    if (!st)  return '';
+    if (!today) today = new Date().toISOString().slice(0, 10);
+
+    const entries = [...((obsMap || {})[stId] || [])]
+      .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.createdAt - a.createdAt);
+
+    const entryRows = entries.map(entry => `
+      <div class="obs-entry">
+        <div class="obs-entry-header">
+          <div class="obs-entry-date-wrap">
+            <input type="date" class="taller-date-input obs-date-input"
+                   data-action="obs-date" data-student="${st.id}" data-id="${entry.id}"
+                   value="${entry.date || today}" title="Cambiar fecha">
+            <span class="obs-entry-date-label">${this._esc(this._fmtDateES(entry.date))}</span>
+          </div>
+          <button class="taller-del-btn" data-action="del-obs-entry"
+                  data-student="${st.id}" data-id="${entry.id}" title="Eliminar observación">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <textarea class="taller-textarea obs-textarea"
+                  data-action="obs-text" data-student="${st.id}" data-id="${entry.id}"
+                  placeholder="Escribe la observación..."
+                  rows="3">${this._esc(entry.content || '')}</textarea>
+      </div>`).join('');
+
+    return `
+      <div class="obs-detail-header">
+        <div class="obs-detail-student-info">
+          <span class="obs-detail-student-name">${this._esc(st.name)}</span>
+          ${st.retired ? '<span class="retired-badge">Retirado</span>' : ''}
+          <span class="obs-detail-count">${entries.length} obs.</span>
+        </div>
+        <button class="btn-add" data-action="add-obs-entry" data-student="${st.id}">
+          + Nueva observación
+        </button>
       </div>
-      <div class="obs-search-bar">
-        <input type="text" class="obs-search-input" data-action="obs-filter"
-               placeholder="Buscar alumno por nombre...">
-      </div>
-      <div class="obs-body">${cards}</div>`;
+      <div class="obs-entries-list">
+        ${entries.length === 0
+          ? `<div class="obs-detail-empty"><p>Sin observaciones aún.<br>Clic en <strong>+ Nueva observación</strong>.</p></div>`
+          : entryRows}
+      </div>`;
+  }
+
+  _refreshObsDetail(stId) {
+    const panel = document.getElementById('obs-detail-panel');
+    if (!panel) return;
+    const cId    = this.state.activeCourse;
+    const today  = new Date().toISOString().slice(0, 10);
+    const obsMap = this.state.observations[cId] || {};
+    panel.innerHTML = this._renderObsDetail(stId, obsMap, today);
+    this._refreshObsLeftBadge(stId, (obsMap[stId] || []).length);
+  }
+
+  _refreshObsLeftBadge(stId, count) {
+    const item = document.querySelector(`.obs-list-item[data-student="${stId}"]`);
+    if (!item) return;
+    let badge = item.querySelector('.obs-list-badge');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'obs-list-badge';
+        item.appendChild(badge);
+      }
+      badge.textContent = count;
+    } else {
+      if (badge) badge.remove();
+    }
   }
 
   _exportObsCSV() {
