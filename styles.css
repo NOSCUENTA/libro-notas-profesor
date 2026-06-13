@@ -589,9 +589,22 @@ tbody tr:hover td { background-color: rgba(0,0,0,0.018); }
   height: 38px;
 }
 .student-name { flex: 1; overflow: hidden; text-overflow: ellipsis; font-size: 0.88rem; }
+.name-retired { text-decoration: line-through; color: var(--ink-4); }
+.retired-badge {
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em;
+  background: #fff0f0; color: #c62828; border: 1px solid #ffcdd2;
+  border-radius: 4px; padding: 1px 5px; white-space: nowrap; flex-shrink: 0;
+}
+.student-row-retired { opacity: 0.55; }
+.student-row-retired:hover { opacity: 0.8; }
 
-.del-student-btn {
-  opacity: 0;
+.student-btn-group {
+  display: flex; align-items: center; gap: 2px;
+  flex-shrink: 0; opacity: 0; transition: var(--t);
+}
+tbody tr:hover .student-btn-group { opacity: 1; }
+
+.edit-student-btn, .retire-student-btn, .del-student-btn {
   width: 18px; height: 18px;
   border-radius: 50%;
   display: flex;
@@ -607,7 +620,8 @@ tbody tr:hover td { background-color: rgba(0,0,0,0.018); }
   line-height: 1;
   padding: 0;
 }
-tbody tr:hover .del-student-btn { opacity: 1; }
+.edit-student-btn:hover { background: #e3f2fd; color: #1565c0; border-color: #90caf9; }
+.retire-student-btn:hover { background: #fff8e1; color: #e65100; border-color: #ffcc02; }
 .del-student-btn:hover { background: #fcdede; color: var(--g-fail-fg); border-color: var(--g-fail-bdr); }
 
 /* Grade cells */
@@ -1581,6 +1595,21 @@ tfoot tr {
 .taller-empty p { font-size: 0.95rem; line-height: 1.6; font-style: italic; }
 
 /* ── Observaciones view ───────────────────────────────────────────────────── */
+.obs-search-bar {
+  padding: 8px 22px 0;
+}
+.obs-search-input {
+  width: 100%; max-width: 340px;
+  padding: 7px 12px 7px 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 10px center;
+  outline: none;
+  transition: var(--t);
+}
+.obs-search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(99,102,241,0.12); }
+
 .obs-hint-bar {
   padding: 8px 22px;
   font-size: 0.78rem;
@@ -1733,7 +1762,7 @@ tfoot tr {
 
 /* ── Print ────────────────────────────────────────────────────────────────── */
 @media print {
-  .sidebar, .topbar-actions, .del-student-btn, .eval-del, .th-add,
+  .sidebar, .topbar-actions, .del-student-btn, .edit-student-btn, .retire-student-btn, .student-btn-group, .eval-del, .th-add, .obs-search-bar,
   .stats-panel, .modal-backdrop, .modal, .toast { display: none !important; }
   .main { width: 100%; }
   .table-wrap { overflow: visible; }
