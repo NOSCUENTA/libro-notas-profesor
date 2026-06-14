@@ -2708,13 +2708,15 @@ tfoot tr {
 .tour-skip:hover { background: #f5f5f5; color: #777; }
 .tour-title {
   font-family: var(--ff-display);
-  font-size: 1.05rem; font-weight: 600;
+  font-size: 1.1rem; font-weight: 600;
   color: var(--navy);
-  margin: 0 0 6px;
+  margin: 0 0 8px;
+  text-align: center;
 }
 .tour-desc {
-  font-size: .86rem; color: #555;
-  line-height: 1.55; margin: 0 0 14px;
+  font-size: .88rem; color: #555;
+  line-height: 1.6; margin: 0 0 16px;
+  text-align: center;
 }
 .tour-label {
   display: block;
