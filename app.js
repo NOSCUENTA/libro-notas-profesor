@@ -211,6 +211,7 @@ class GradeBook {
     if (!s.observations) s.observations = {};
     if (!s.attendance)   s.attendance   = {};
     if (!s.attendanceDate) s.attendanceDate = new Date().toISOString().slice(0, 10);
+    if (!s.reminders)    s.reminders    = [];
 
     if (!s.activeCourse || !s.courses.find(c => c.id === s.activeCourse))
       s.activeCourse = s.courses[0]?.id || null;
@@ -399,6 +400,9 @@ class GradeBook {
         <button class="sb-btn sb-btn-deudores${this.state.view === 'deudores' ? ' sb-btn-on' : ''}" data-action="show-deudores">
           ${this._icon('deudores')} Deudores de notas
         </button>
+        <button class="sb-btn sb-btn-recs${this.state.view === 'recordatorios' ? ' sb-btn-on' : ''}${(this.state.reminders||[]).filter(r=>!r.done).length ? ' sb-btn-recs-pending' : ''}" data-action="show-recordatorios">
+          ${this._icon('reminder')} Recordatorios${(this.state.reminders||[]).filter(r=>!r.done).length ? ` <span class="sb-recs-badge">${(this.state.reminders||[]).filter(r=>!r.done).length}</span>` : ''}
+        </button>
         <button class="sb-btn sb-btn-clases${this.state.view === 'clases' ? ' sb-btn-on' : ''}" data-action="show-clases">
           ${this._icon('clases')} Gestionar clases
         </button>
@@ -429,8 +433,9 @@ class GradeBook {
   }
 
   renderMain() {
-    if (this.state.view === 'clases')   return this.renderMisClases();
-    if (this.state.view === 'deudores') return this.renderDeudores();
+    if (this.state.view === 'clases')         return this.renderMisClases();
+    if (this.state.view === 'deudores')       return this.renderDeudores();
+    if (this.state.view === 'recordatorios')  return this.renderRecordatorios();
     const { activeCourse, activeSubject, courses, subjects } = this.state;
     if (!activeCourse || !activeSubject) return this.renderOverview();
 
@@ -943,6 +948,16 @@ class GradeBook {
     } else if (a === 'show-clases') {
       this.state.view = 'clases';
       this.render();
+
+    } else if (a === 'show-recordatorios') {
+      this.state.view = 'recordatorios';
+      this.render();
+    } else if (a === 'add-reminder') {
+      this._promptAddReminder();
+    } else if (a === 'toggle-reminder') {
+      this._toggleReminder(el.dataset.id);
+    } else if (a === 'del-reminder') {
+      this._deleteReminder(el.dataset.id);
 
     } else if (a === 'add-course') {
       this._promptAddCourse();
@@ -1672,6 +1687,7 @@ class GradeBook {
       'drive':      `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M4.5 9.5l-3-5.5h7l3 5.5H4.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M1.5 4L5 9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M11.5 4L8 9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
       'attendance': `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="2" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 1v2M9 1v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M4 7l1.5 1.5L9 5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
       'print':      `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="3" y="1" width="7" height="4" rx="0.8" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="5" width="9" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="4" y="8" width="5" height="3" rx="0.5" fill="currentColor" opacity=".4"/><circle cx="10" cy="7" r="0.7" fill="currentColor"/></svg>`,
+      'reminder':   `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1.5A3.5 3.5 0 003 5v2.5L2 9h9l-1-1.5V5A3.5 3.5 0 006.5 1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M5.5 9.5a1 1 0 002 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
     };
     return icons[name] || '';
   }
@@ -2958,12 +2974,122 @@ class GradeBook {
     }
   }
 
+  // ── Recordatorios ────────────────────────────────────────────────────────────
+
+  renderRecordatorios() {
+    const reminders = this.state.reminders || [];
+    const pending   = reminders.filter(r => !r.done);
+    const done      = reminders.filter(r =>  r.done);
+
+    const renderItem = r => {
+      const course = r.courseId ? this.state.courses.find(c => c.id === r.courseId) : null;
+      return `
+        <div class="rec-item${r.done ? ' rec-done' : ''}">
+          <button class="rec-check${r.done ? ' rec-check-done' : ''}" data-action="toggle-reminder" data-id="${r.id}" title="${r.done ? 'Marcar pendiente' : 'Marcar como hecho'}">
+            ${r.done ? '✓' : ''}
+          </button>
+          <div class="rec-content">
+            <span class="rec-text">${this._esc(r.text)}</span>
+            ${course ? `<span class="rec-course-tag">${this._esc(course.name)}</span>` : ''}
+          </div>
+          <button class="rec-del" data-action="del-reminder" data-id="${r.id}" title="Eliminar">×</button>
+        </div>`;
+    };
+
+    return `
+      <div class="topbar">
+        <div class="breadcrumb"><span class="bc-overview">Recordatorios</span></div>
+        <div class="topbar-actions">
+          <button class="btn-add" data-action="add-reminder">+ Nuevo recordatorio</button>
+        </div>
+      </div>
+      <div class="rec-wrap">
+        ${!reminders.length
+          ? `<div class="rec-empty">Sin recordatorios. Haz clic en <strong>+ Nuevo recordatorio</strong> para agregar uno.</div>`
+          : ''}
+        ${pending.length ? `
+          <div class="rec-section-label">Pendientes · ${pending.length}</div>
+          ${pending.map(renderItem).join('')}` : ''}
+        ${done.length ? `
+          <div class="rec-section-label rec-section-done">Completados · ${done.length}</div>
+          ${done.map(renderItem).join('')}` : ''}
+      </div>`;
+  }
+
+  _promptAddReminder() {
+    const { courses } = this.state;
+    const courseOptions = courses.map(c =>
+      `<option value="${c.id}">${this._esc(c.name)}</option>`).join('');
+
+    this.showModal({
+      title: 'Nuevo recordatorio',
+      body: `
+        <label class="modal-label">Recordatorio</label>
+        <input type="text" id="m-input" class="modal-input" placeholder="Ej: Llevar prueba impresa a 3° Básico" autofocus>
+        ${courseOptions ? `
+          <label class="modal-label" style="margin-top:12px">Clase relacionada (opcional)</label>
+          <select id="m-rec-course" class="modal-select">
+            <option value="">Sin clase específica</option>
+            ${courseOptions}
+          </select>` : ''}`,
+      confirm: 'Agregar',
+      onConfirm: () => {
+        const text = document.getElementById('m-input').value.trim();
+        if (!text) { this.hideModal(); return; }
+        const courseId = document.getElementById('m-rec-course')?.value || null;
+        if (!this.state.reminders) this.state.reminders = [];
+        this.state.reminders.unshift({
+          id: `r_${Date.now()}`,
+          text,
+          courseId: courseId || null,
+          done: false,
+          createdAt: Date.now()
+        });
+        this.save(); this.hideModal(); this.render();
+        this.toast('Recordatorio agregado');
+      }
+    });
+  }
+
+  _toggleReminder(id) {
+    const r = (this.state.reminders || []).find(r => r.id === id);
+    if (r) { r.done = !r.done; this.save(); this.render(); }
+  }
+
+  _deleteReminder(id) {
+    this.state.reminders = (this.state.reminders || []).filter(r => r.id !== id);
+    this.save(); this.render();
+  }
+
+  _showRemindersPopup() {
+    if (sessionStorage.getItem('recs_shown')) return;
+    const pending = (this.state.reminders || []).filter(r => !r.done);
+    if (!pending.length) return;
+    sessionStorage.setItem('recs_shown', '1');
+    const items = pending.map(r => {
+      const course = r.courseId ? this.state.courses.find(c => c.id === r.courseId) : null;
+      return `<li class="rec-popup-item">
+        <span class="rec-popup-dot"></span>
+        <span class="rec-popup-text">${this._esc(r.text)}</span>
+        ${course ? `<span class="rec-popup-course">${this._esc(course.name)}</span>` : ''}
+      </li>`;
+    }).join('');
+    this.showModal({
+      title: `Tienes ${pending.length} recordatorio${pending.length !== 1 ? 's' : ''} pendiente${pending.length !== 1 ? 's' : ''}`,
+      body: `<ul class="rec-popup-list">${items}</ul>
+             <p class="modal-hint" style="margin-top:12px">Puedes gestionarlos desde <strong>Recordatorios</strong> en el menú lateral.</p>`,
+      confirm: 'Entendido',
+      onConfirm: () => this.hideModal()
+    });
+  }
+
   // ── Init ─────────────────────────────────────────────────────────────────────
 
   init() {
     this.load();
     this._bindAll();
     this.render();
+    this._showRemindersPopup();
   }
 }
 
