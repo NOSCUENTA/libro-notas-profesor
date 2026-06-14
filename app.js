@@ -2982,7 +2982,7 @@ class GradeBook {
     const done      = reminders.filter(r =>  r.done);
 
     const renderItem = r => {
-      const course = r.courseId ? this.state.courses.find(c => c.id === r.courseId) : null;
+      const displayCourse = r.courseName || (r.courseId ? this.state.courses.find(c => c.id === r.courseId)?.name : null);
       return `
         <div class="rec-item${r.done ? ' rec-done' : ''}">
           <button class="rec-check${r.done ? ' rec-check-done' : ''}" data-action="toggle-reminder" data-id="${r.id}" title="${r.done ? 'Marcar pendiente' : 'Marcar como hecho'}">
@@ -2990,7 +2990,7 @@ class GradeBook {
           </button>
           <div class="rec-content">
             <span class="rec-text">${this._esc(r.text)}</span>
-            ${course ? `<span class="rec-course-tag" style="font-size:0.75rem;background:var(--navy,#1e3a5f);color:#fff;border-radius:99px;padding:2px 9px;margin-left:4px;opacity:0.8">${this._esc(course.name)}</span>` : ''}
+            ${displayCourse ? `<span class="rec-course-tag" style="font-size:0.75rem;background:#1e3a5f;color:#fff;border-radius:99px;padding:2px 9px;margin-left:4px;opacity:0.85">${this._esc(displayCourse)}</span>` : ''}
           </div>
           <button class="rec-del" data-action="del-reminder" data-id="${r.id}" title="Eliminar">×</button>
         </div>`;
@@ -3036,12 +3036,14 @@ class GradeBook {
       onConfirm: () => {
         const text = document.getElementById('m-input').value.trim();
         if (!text) { this.hideModal(); return; }
-        const courseId = document.getElementById('m-rec-course')?.value || null;
+        const courseId   = document.getElementById('m-rec-course')?.value || null;
+        const courseName = courseId ? (this.state.courses.find(c => c.id === courseId)?.name || null) : null;
         if (!this.state.reminders) this.state.reminders = [];
         this.state.reminders.unshift({
           id: `r_${Date.now()}`,
           text,
-          courseId: courseId || null,
+          courseId:   courseId   || null,
+          courseName: courseName || null,
           done: false,
           createdAt: Date.now()
         });
