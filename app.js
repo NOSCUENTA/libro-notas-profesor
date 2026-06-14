@@ -2284,6 +2284,17 @@ class GradeBook {
   }
 
   _promptAddSubject() {
+    const { courses } = this.state;
+    const courseChecks = courses.length ? `
+      <label class="modal-label" style="margin-top:14px">Asignar a clases</label>
+      <div class="mc-modal-checks">
+        ${courses.map(c => `
+          <label class="mc-modal-check">
+            <input type="checkbox" name="asign-course" value="${c.id}" checked>
+            ${this._esc(c.name)}
+          </label>`).join('')}
+      </div>` : '';
+
     this.showModal({
       title: 'Nueva asignatura',
       body: `
@@ -2292,7 +2303,8 @@ class GradeBook {
         <label class="mc-modal-check" style="margin-top:12px">
           <input type="checkbox" id="m-conc"> Calificación conceptual (I / S / B / MB)
         </label>
-        <div class="modal-hint" style="margin-top:6px">Si no marcas esta opción, las notas serán numéricas (2.0 – 7.0).</div>`,
+        <div class="modal-hint" style="margin-top:6px">Si no marcas esta opción, las notas serán numéricas (2.0 – 7.0).</div>
+        ${courseChecks}`,
       confirm: 'Crear',
       onConfirm: () => {
         const name = document.getElementById('m-input').value.trim();
@@ -2300,6 +2312,20 @@ class GradeBook {
         const isConceptual = document.getElementById('m-conc')?.checked || false;
         const id = `s_${Date.now()}`;
         this.state.subjects.push({ id, name, isConceptual });
+        const baseEvals = isConceptual ? ['C1','C2','C3','C4'] : ['N1','N2','N3'];
+        const assignTo = [...document.querySelectorAll('input[name="asign-course"]:checked')].map(el => el.value);
+        assignTo.forEach(cId => {
+          if (!this.state.courseSubjects[cId]) this.state.courseSubjects[cId] = [];
+          if (!this.state.courseSubjects[cId].includes(id))
+            this.state.courseSubjects[cId].push(id);
+          if (!this.state.evaluations[cId][id])
+            this.state.evaluations[cId][id] = { s1:[...baseEvals], s2:[...baseEvals] };
+          if (!this.state.grades[cId][id]) this.state.grades[cId][id] = {};
+          (this.state.students[cId] || []).forEach(st => {
+            if (!this.state.grades[cId][id][st.id])
+              this.state.grades[cId][id][st.id] = { s1:{}, s2:{} };
+          });
+        });
         this.save(); this.hideModal(); this.render();
         this.toast(`Asignatura "${name}" creada`);
       }
