@@ -4,7 +4,17 @@
 const MIN_GRADE  = 2.0;
 const MAX_GRADE  = 7.0;
 const PASS_GRADE = 4.0;
-const STORE_KEY  = 'libro_calificaciones_v3';
+const STORE_KEY           = 'libro_calificaciones_v3';
+const BACKUP_KEY          = 'libro_notas_last_backup';
+const BACKUP_WARNING_DAYS = 7;
+
+// ── Google Drive (opcional) ────────────────────────────────────────────────────
+// Para activar: crea un proyecto en console.cloud.google.com,
+// habilita "Drive API" y copia tu OAuth 2.0 Client ID aquí.
+const GDRIVE_CLIENT_ID = '737617281353-h0hnir3gbbu7fjccdsao73btnt0k2p05.apps.googleusercontent.com';
+const GDRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.appdata';
+const GDRIVE_FILE_NAME = 'libro_notas_backup.json';
+const GDRIVE_TOKEN_KEY = 'libro_notas_gdrive_token';
 
 const DEFAULT_COURSES = [
   { id:'c1', name:'1° Básico A' }, { id:'c2', name:'2° Básico A' },
@@ -46,18 +56,22 @@ const SAMPLE_STUDENTS = [
   'López Reyes, Nicolás',   'Morales Bravo, Martina',  'Núñez Pérez, Emilio',
 ];
 
+const STATE_VERSION = 'v4';
+
 // ── Default state factory ──────────────────────────────────────────────────────
 function makeDefaultState() {
-  const students    = {};
-  const grades      = {};
-  const evaluations = {};
+  const students       = {};
+  const grades         = {};
+  const evaluations    = {};
+  const courseSubjects = {};
 
   DEFAULT_COURSES.forEach(c => {
-    students[c.id]    = SAMPLE_STUDENTS.map((name, i) => ({ id:`${c.id}_st${i}`, name }));
-    grades[c.id]      = {};
-    evaluations[c.id] = {};
+    const subjIds       = COURSE_SUBJECTS[c.id] || ['s1'];
+    courseSubjects[c.id] = subjIds;
+    students[c.id]      = SAMPLE_STUDENTS.map((name, i) => ({ id:`${c.id}_st${i}`, name }));
+    grades[c.id]        = {};
+    evaluations[c.id]   = {};
 
-    const subjIds = COURSE_SUBJECTS[c.id] || ['s1'];
     subjIds.forEach(sId => {
       const isConc    = CONCEPTUAL_SUBJECTS.has(sId);
       const baseEvals = isConc ? ['C1','C2','C3','C4'] : ['N1','N2','N3'];
@@ -70,13 +84,15 @@ function makeDefaultState() {
   });
 
   return {
-    courses:      DEFAULT_COURSES.map(c => ({...c})),
-    subjects:     DEFAULT_SUBJECTS.map(s => ({...s})),
+    _version:      STATE_VERSION,
+    courses:       DEFAULT_COURSES.map(c => ({...c, hasTaller: TALLER_COURSES.has(c.id)})),
+    subjects:      DEFAULT_SUBJECTS.map(s => ({...s, isConceptual: CONCEPTUAL_SUBJECTS.has(s.id)})),
+    courseSubjects,
     students,
     evaluations,
     grades,
-    taller:       {},   // taller[courseId] = [{id, date, content, createdAt}]
-    observations: {},   // observations[courseId] = {studentId: text}
+    taller:        {},
+    observations:  {},
     activeCourse:  'c1',
     activeSubject: 's1',
     view:          'grades',
@@ -99,6 +115,7 @@ class GradeBook {
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         this.state = JSON.parse(raw);
+        this._migrateIfNeeded();
         this._ensureIntegrity();
       } else {
         this.state = makeDefaultState();
@@ -112,22 +129,72 @@ class GradeBook {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(this.state)); } catch {}
   }
 
+  _migrateIfNeeded() {
+    const s = this.state;
+    if (s._version === STATE_VERSION) return;
+
+    // v3 → v4: añadir campos dinámicos sin modificar datos existentes
+    if (!s.courseSubjects) {
+      s.courseSubjects = {};
+      (s.courses || DEFAULT_COURSES).forEach(c => {
+        s.courseSubjects[c.id] = COURSE_SUBJECTS[c.id] || ['s1'];
+      });
+    }
+    if (s.courses) {
+      s.courses.forEach(c => {
+        if (c.hasTaller === undefined) c.hasTaller = TALLER_COURSES.has(c.id);
+      });
+    }
+    if (s.subjects) {
+      s.subjects.forEach(sub => {
+        if (sub.isConceptual === undefined)
+          sub.isConceptual = CONCEPTUAL_SUBJECTS.has(sub.id);
+      });
+    } else {
+      s.subjects = DEFAULT_SUBJECTS.map(sub => ({...sub, isConceptual: CONCEPTUAL_SUBJECTS.has(sub.id)}));
+    }
+
+    s._version = STATE_VERSION;
+    this.save();
+  }
+
+  // ── Dynamic state helpers ────────────────────────────────────────────────────
+
+  _isConceptual(sId) {
+    return !!(this.state.subjects?.find(s => s.id === sId)?.isConceptual);
+  }
+
+  _hasTaller(cId) {
+    return !!(this.state.courses?.find(c => c.id === cId)?.hasTaller);
+  }
+
+  _courseSubjects(cId) {
+    return this.state.courseSubjects?.[cId] || COURSE_SUBJECTS[cId] || ['s1'];
+  }
+
   _ensureIntegrity() {
     const s = this.state;
-    s.subjects = DEFAULT_SUBJECTS.map(x => ({...x}));
+
+    // v4: subjects son dinámicos — solo inicializar si no existen
+    if (!s.subjects || !s.subjects.length)
+      s.subjects = DEFAULT_SUBJECTS.map(sub => ({...sub, isConceptual: CONCEPTUAL_SUBJECTS.has(sub.id)}));
+    if (!s.courses || !s.courses.length)
+      s.courses = DEFAULT_COURSES.map(c => ({...c, hasTaller: TALLER_COURSES.has(c.id)}));
+    if (!s.courseSubjects) s.courseSubjects = {};
 
     if (!s.students)    s.students    = {};
     if (!s.grades)      s.grades      = {};
     if (!s.evaluations) s.evaluations = {};
 
-    DEFAULT_COURSES.forEach(c => {
-      if (!s.students[c.id])    s.students[c.id]    = [];
-      if (!s.grades[c.id])      s.grades[c.id]      = {};
-      if (!s.evaluations[c.id]) s.evaluations[c.id] = {};
+    s.courses.forEach(c => {
+      if (!s.courseSubjects[c.id]) s.courseSubjects[c.id] = ['s1'];
+      if (!s.students[c.id])       s.students[c.id]       = [];
+      if (!s.grades[c.id])         s.grades[c.id]         = {};
+      if (!s.evaluations[c.id])    s.evaluations[c.id]    = {};
 
-      const subjIds = COURSE_SUBJECTS[c.id] || ['s1'];
+      const subjIds = this._courseSubjects(c.id);
       subjIds.forEach(sId => {
-        const isConc    = CONCEPTUAL_SUBJECTS.has(sId);
+        const isConc    = this._isConceptual(sId);
         const baseEvals = isConc ? ['C1','C2','C3','C4'] : ['N1','N2','N3'];
         if (!s.evaluations[c.id][sId])
           s.evaluations[c.id][sId] = { s1:[...baseEvals], s2:[...baseEvals] };
@@ -143,17 +210,16 @@ class GradeBook {
     if (!s.taller)       s.taller       = {};
     if (!s.observations) s.observations = {};
 
-    if (!s.activeCourse || !DEFAULT_COURSES.find(c => c.id === s.activeCourse))
-      s.activeCourse = 'c1';
+    if (!s.activeCourse || !s.courses.find(c => c.id === s.activeCourse))
+      s.activeCourse = s.courses[0]?.id || null;
 
-    // Subjects especiales (__taller__, __obs__) son válidos según el curso
-    const validSubjs   = COURSE_SUBJECTS[s.activeCourse] || ['s1'];
-    const specialValid = ['__obs__', ...(TALLER_COURSES.has(s.activeCourse) ? ['__taller__'] : [])];
+    const validSubjs   = this._courseSubjects(s.activeCourse);
+    const specialValid = ['__obs__', ...(this._hasTaller(s.activeCourse) ? ['__taller__'] : [])];
     const isValidSubj  = validSubjs.includes(s.activeSubject) || specialValid.includes(s.activeSubject);
     if (!s.activeSubject || !isValidSubj)
       s.activeSubject = validSubjs[0];
 
-    if (!s.teacherName) s.teacherName = 'Profesor/a de Historia';
+    if (!s.teacherName) s.teacherName = 'Profesor/a';
     if (!s.year)        s.year        = new Date().getFullYear();
     if (!s.view)        s.view        = 'grades';
   }
@@ -219,7 +285,7 @@ class GradeBook {
       const gmap    = this.state.grades[cId][sId][stId][sem] || {};
       const vals    = evNames.map(e => gmap[e] ?? null).filter(v => v !== null && v !== undefined && v !== '');
       if (!vals.length) return null;
-      return CONCEPTUAL_SUBJECTS.has(sId)
+      return this._isConceptual(sId)
         ? this.conceptAvg(vals)
         : this.avg(vals.filter(v => typeof v === 'number'));
     } catch { return null; }
@@ -230,7 +296,7 @@ class GradeBook {
     const a2   = this.semAvg(cId, sId, stId, 's2');
     const both = [a1, a2].filter(v => v !== null);
     if (!both.length) return null;
-    return CONCEPTUAL_SUBJECTS.has(sId)
+    return this._isConceptual(sId)
       ? this.conceptAvg(both.filter(v => typeof v === 'string'))
       : this.avg(both.filter(v => typeof v === 'number'));
   }
@@ -240,15 +306,22 @@ class GradeBook {
   render() {
     document.getElementById('app').innerHTML =
       `<aside class="sidebar">${this.renderSidebar()}</aside>` +
-      `<main  class="main">${this.renderMain()}</main>`;
+      `<main  class="main">${this._renderBackupBanner()}${this.renderMain()}</main>`;
   }
 
   renderSidebar() {
     const { courses, subjects, activeCourse, activeSubject, teacherName, year } = this.state;
+    const backupDays = this._getDaysSinceBackup();
+    const backupLast = localStorage.getItem(BACKUP_KEY);
+    const backupStatusHtml = backupLast === null
+      ? `<div class="sb-backup-status sb-backup-never">Sin respaldo — datos en riesgo</div>`
+      : backupDays === 0
+        ? `<div class="sb-backup-status sb-backup-ok">Respaldo de hoy ✓</div>`
+        : `<div class="sb-backup-status${backupDays >= BACKUP_WARNING_DAYS ? ' sb-backup-warn' : ' sb-backup-ok'}">Respaldo hace ${backupDays} día${backupDays !== 1 ? 's' : ''}</div>`;
 
     const courseItems = courses.map(c => {
       const active   = c.id === activeCourse;
-      const subjIds  = COURSE_SUBJECTS[c.id] || ['s1'];
+      const subjIds  = this._courseSubjects(c.id);
       const subjList = subjects.filter(s => subjIds.includes(s.id));
 
       const tallerCount = (this.state.taller?.[c.id] || []).length;
@@ -263,9 +336,9 @@ class GradeBook {
                 data-action="set-subject" data-subject="${s.id}">
               <span class="subject-dot"></span>
               <span>${s.name}</span>
-              ${CONCEPTUAL_SUBJECTS.has(s.id) ? '<span class="conc-badge">I·S·B·MB</span>' : ''}
+              ${s.isConceptual ? '<span class="conc-badge">I·S·B·MB</span>' : ''}
             </li>`).join('')}
-          ${TALLER_COURSES.has(c.id) ? `
+          ${this._hasTaller(c.id) ? `
             <li class="subject-item taller-sb-item${activeSubject === '__taller__' ? ' active' : ''}"
                 data-action="set-subject" data-subject="__taller__">
               <span class="subject-dot taller-dot"></span>
@@ -319,6 +392,20 @@ class GradeBook {
         <button class="sb-btn sb-btn-deudores${this.state.view === 'deudores' ? ' sb-btn-on' : ''}" data-action="show-deudores">
           ${this._icon('deudores')} Deudores de notas
         </button>
+        <button class="sb-btn sb-btn-clases${this.state.view === 'clases' ? ' sb-btn-on' : ''}" data-action="show-clases">
+          ${this._icon('clases')} Gestionar clases
+        </button>
+        <div class="sb-backup-row">
+          <button class="sb-btn sb-btn-backup" data-action="export-backup" title="Descargar respaldo completo">
+            ${this._icon('backup')} Crear respaldo
+          </button>
+          <button class="sb-btn sb-btn-restore" data-action="import-backup" title="Restaurar desde archivo">
+            ${this._icon('restore')} Restaurar
+          </button>
+          <button class="sb-btn sb-btn-backup-help" data-action="show-backup-help" title="¿Cómo funciona el respaldo?">?</button>
+        </div>
+        ${backupStatusHtml}
+        ${GDRIVE_CLIENT_ID ? this._renderDriveSection() : ''}
       </div>
 
       <div class="sb-school-brand">
@@ -335,6 +422,7 @@ class GradeBook {
   }
 
   renderMain() {
+    if (this.state.view === 'clases')   return this.renderMisClases();
     if (this.state.view === 'deudores') return this.renderDeudores();
     const { activeCourse, activeSubject, courses, subjects } = this.state;
     if (!activeCourse || !activeSubject) return this.renderOverview();
@@ -346,7 +434,7 @@ class GradeBook {
     const subject = subjects.find(s => s.id === activeSubject);
     if (!course || !subject) return this.renderOverview();
 
-    const isConc   = CONCEPTUAL_SUBJECTS.has(activeSubject);
+    const isConc   = this._isConceptual(activeSubject);
     const students = this.state.students[activeCourse] || [];
     const evs      = this.state.evaluations[activeCourse][activeSubject];
 
@@ -359,6 +447,9 @@ class GradeBook {
           ${isConc ? '<span class="bc-conc-tag">Conceptual</span>' : ''}
         </div>
         <div class="topbar-actions">
+          <button class="btn-add btn-add-secondary" data-action="import-students">
+            ${this._icon('import')} Importar
+          </button>
           <button class="btn-add" data-action="add-student">
             ${this._icon('add-person')} Agregar alumno
           </button>
@@ -421,7 +512,7 @@ class GradeBook {
     const { activeCourse: cId, activeSubject: sId } = this.state;
     const gmap  = this.state.grades[cId][sId][st.id] || { s1:{}, s2:{} };
     const evs   = this.state.evaluations[cId][sId];
-    const isConc = CONCEPTUAL_SUBJECTS.has(sId);
+    const isConc = this._isConceptual(sId);
 
     const s1Avg = this.semAvg(cId, sId, st.id, 's1');
     const s2Avg = this.semAvg(cId, sId, st.id, 's2');
@@ -474,7 +565,7 @@ class GradeBook {
 
   renderStatsRow(students, evs) {
     const { activeCourse: cId, activeSubject: sId } = this.state;
-    const isConc = CONCEPTUAL_SUBJECTS.has(sId);
+    const isConc = this._isConceptual(sId);
 
     const evalAvg = (sem, e) => {
       const vals = students
@@ -518,7 +609,7 @@ class GradeBook {
   renderStatsPanel(students) {
     const { activeCourse: cId, activeSubject: sId } = this.state;
 
-    if (CONCEPTUAL_SUBJECTS.has(sId)) {
+    if (this._isConceptual(sId)) {
       // Panel de distribución conceptual
       const finals = students.map(st => this.finalAvg(cId, sId, st.id)).filter(v => v !== null);
       const total  = finals.length || 1;
@@ -585,13 +676,12 @@ class GradeBook {
     const { courses, subjects } = this.state;
 
     const cards = courses.map(c => {
-      const students = this.state.students[c.id] || [];
-      const sId      = COURSE_SUBJECTS[c.id]?.[0] || 's1';
-      const isConc   = CONCEPTUAL_SUBJECTS.has(sId);
-      const finals   = students.map(st => this.finalAvg(c.id, sId, st.id)).filter(v => v !== null);
-      const subjNames = (COURSE_SUBJECTS[c.id] || ['s1'])
-        .map(id => subjects.find(s => s.id === id)?.name || '')
-        .join(' · ');
+      const students  = this.state.students[c.id] || [];
+      const subjIds   = this._courseSubjects(c.id);
+      const sId       = subjIds[0] || 's1';
+      const isConc    = this._isConceptual(sId);
+      const finals    = students.map(st => this.finalAvg(c.id, sId, st.id)).filter(v => v !== null);
+      const subjNames = subjIds.map(id => subjects.find(s => s.id === id)?.name || '').join(' · ');
 
       let avgDisplay, passed, pct;
       if (isConc) {
@@ -730,7 +820,7 @@ class GradeBook {
     if (a === 'set-course') {
       const cId = el.dataset.course;
       this.state.activeCourse  = cId;
-      const validSubjs = COURSE_SUBJECTS[cId] || ['s1'];
+      const validSubjs = this._courseSubjects(cId);
       this.state.activeSubject = validSubjs[0];
       this.state.view = 'grades';
       this.save(); this.render();
@@ -742,6 +832,9 @@ class GradeBook {
 
     } else if (a === 'edit-grade') {
       this._startEdit(el);
+
+    } else if (a === 'import-students') {
+      this._promptImportStudents();
 
     } else if (a === 'add-student') {
       this._promptAddStudent();
@@ -773,6 +866,24 @@ class GradeBook {
     } else if (a === 'show-deudores') {
       this.state.view = 'deudores';
       this.save(); this.render();
+
+    } else if (a === 'show-clases') {
+      this.state.view = 'clases';
+      this.render();
+
+    } else if (a === 'add-course') {
+      this._promptAddCourse();
+    } else if (a === 'edit-course') {
+      this._promptEditCourse(el.dataset.course);
+    } else if (a === 'del-course') {
+      this._confirmDeleteCourse(el.dataset.course);
+
+    } else if (a === 'add-subject') {
+      this._promptAddSubject();
+    } else if (a === 'edit-subject') {
+      this._promptEditSubject(el.dataset.subject);
+    } else if (a === 'del-subject') {
+      this._confirmDeleteSubject(el.dataset.subject);
 
 
     } else if (a === 'export-csv') {
@@ -854,6 +965,24 @@ class GradeBook {
 
     } else if (a === 'export-obs') {
       this._exportObsCSV();
+
+    } else if (a === 'export-backup') {
+      this._exportBackup();
+    } else if (a === 'import-backup') {
+      this._importBackup();
+    } else if (a === 'show-backup-help') {
+      this._showBackupHelp();
+    } else if (a === 'dismiss-backup-banner') {
+      document.getElementById('backup-banner')?.remove();
+
+    } else if (a === 'gdrive-connect') {
+      this._gdriveConnect();
+    } else if (a === 'gdrive-disconnect') {
+      this._gdriveDisconnect();
+    } else if (a === 'gdrive-save') {
+      this._gdriveSave();
+    } else if (a === 'gdrive-load') {
+      this._gdriveLoad();
     }
   }
 
@@ -874,7 +1003,7 @@ class GradeBook {
     const evalName  = cell.dataset.eval;
     const { activeCourse: cId, activeSubject: sId } = this.state;
 
-    if (CONCEPTUAL_SUBJECTS.has(sId)) {
+    if (this._isConceptual(sId)) {
       this._startConceptEdit(cell, studentId, sem, evalName, cId, sId);
       return;
     }
@@ -1068,20 +1197,121 @@ class GradeBook {
   }
 
   _addStudent(name, insertIdx) {
-    const { activeCourse: cId, subjects } = this.state;
-    const id   = `${cId}_st_${Date.now()}`;
-    const list = this.state.students[cId];
+    const { activeCourse: cId } = this.state;
+    const id      = `${cId}_st_${Date.now()}`;
+    const list    = this.state.students[cId];
+    const subjIds = this._courseSubjects(cId);
     if (insertIdx !== undefined && insertIdx >= 0 && insertIdx < list.length) {
       list.splice(insertIdx, 0, { id, name });
     } else {
       list.push({ id, name });
     }
-    subjects.forEach(s => {
-      if (!this.state.grades[cId][s.id]) this.state.grades[cId][s.id] = {};
-      this.state.grades[cId][s.id][id] = { s1:{}, s2:{} };
+    subjIds.forEach(sId => {
+      if (!this.state.grades[cId][sId]) this.state.grades[cId][sId] = {};
+      this.state.grades[cId][sId][id] = { s1:{}, s2:{} };
     });
     this.save(); this.render();
     this.toast(`Alumno "${name}" agregado`);
+  }
+
+  _parseStudentText(text) {
+    return text
+      .split(/[\r\n]+/)
+      .map(line => line.split('\t')[0].replace(/^["']|["']$/g, '').trim())
+      .filter(name => name.length > 1);
+  }
+
+  _promptImportStudents() {
+    const { activeCourse: cId } = this.state;
+    const otherCourses = this.state.courses.filter(c => c.id !== cId);
+    const otherOptions = otherCourses.map(c => {
+      const count = (this.state.students[c.id] || []).length;
+      return `<option value="${this._esc(c.id)}">${this._esc(c.name)} (${count} alumnos)</option>`;
+    }).join('');
+
+    this.showModal({
+      title: 'Importar alumnos',
+      body: `
+        <div class="modal-hint" style="margin-bottom:10px">
+          Pega una lista de nombres desde Excel (una columna) o escribe uno por línea:
+        </div>
+        <textarea id="m-import-text" class="modal-import-textarea" rows="9"
+          placeholder="Pérez González, Juan&#10;López Muñoz, María&#10;Rodríguez Silva, Pedro"></textarea>
+        ${otherOptions ? `
+          <div class="modal-section-divider">— o copia nómina de otra clase —</div>
+          <select id="m-copy-course" class="modal-select">
+            <option value="">Seleccionar clase fuente…</option>
+            ${otherOptions}
+          </select>
+        ` : ''}`,
+      confirm: 'Vista previa →',
+      onConfirm: () => {
+        const selectEl   = document.getElementById('m-copy-course');
+        const textareaEl = document.getElementById('m-import-text');
+        let rawNames = [];
+
+        if (selectEl?.value) {
+          rawNames = (this.state.students[selectEl.value] || []).map(s => s.name);
+        } else if (textareaEl?.value.trim()) {
+          rawNames = this._parseStudentText(textareaEl.value);
+        }
+
+        if (!rawNames.length) {
+          this.toast('No se encontraron nombres para importar');
+          return;
+        }
+        this.hideModal();
+        this._showImportPreview(rawNames);
+      }
+    });
+  }
+
+  _showImportPreview(rawNames) {
+    const { activeCourse: cId } = this.state;
+    const existingNames = new Set(
+      (this.state.students[cId] || []).map(s => s.name.toLowerCase().trim())
+    );
+
+    const toAdd = rawNames.filter(n => !existingNames.has(n.toLowerCase().trim()));
+    const dupes = rawNames.filter(n =>  existingNames.has(n.toLowerCase().trim()));
+
+    const addHtml = toAdd.map(n =>
+      `<li class="import-preview-item import-preview-add">${this._esc(n)}</li>`).join('');
+    const dupeHtml = dupes.map(n =>
+      `<li class="import-preview-item import-preview-dupe">${this._esc(n)}</li>`).join('');
+
+    this.showModal({
+      title: 'Vista previa de importación',
+      body: `
+        ${toAdd.length
+          ? `<div class="import-preview-label">
+               <span class="import-preview-badge import-preview-badge-add">${toAdd.length}</span>
+               alumno${toAdd.length !== 1 ? 's' : ''} nuevo${toAdd.length !== 1 ? 's' : ''}:
+             </div>
+             <ul class="import-preview-list">${addHtml}</ul>`
+          : `<p class="modal-hint">No hay alumnos nuevos para agregar.</p>`}
+        ${dupes.length
+          ? `<div class="import-preview-label" style="margin-top:12px">
+               <span class="import-preview-badge import-preview-badge-dupe">${dupes.length}</span>
+               ya existen (se omitirán):
+             </div>
+             <ul class="import-preview-list import-preview-list-dupe">${dupeHtml}</ul>`
+          : ''}`,
+      confirm: toAdd.length ? `Importar ${toAdd.length} alumno${toAdd.length !== 1 ? 's' : ''}` : 'Cerrar',
+      onConfirm: !toAdd.length ? () => this.hideModal() : () => {
+        const subjIds = this._courseSubjects(cId);
+        toAdd.forEach(name => {
+          const id = `${cId}_st_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          (this.state.students[cId] = this.state.students[cId] || []).push({ id, name });
+          subjIds.forEach(sId => {
+            if (!this.state.grades[cId][sId]) this.state.grades[cId][sId] = {};
+            this.state.grades[cId][sId][id] = { s1: {}, s2: {} };
+          });
+        });
+        this.save(); this.hideModal(); this.render();
+        this.toast(`${toAdd.length} alumno${toAdd.length !== 1 ? 's' : ''} importado${toAdd.length !== 1 ? 's' : ''}`);
+      }
+    });
   }
 
   _confirmDeleteStudent(studentId) {
@@ -1149,7 +1379,7 @@ class GradeBook {
 
   _promptAddEval(sem) {
     const { activeCourse: cId, activeSubject: sId } = this.state;
-    const isConc  = CONCEPTUAL_SUBJECTS.has(sId);
+    const isConc  = this._isConceptual(sId);
     const current = this.state.evaluations[cId][sId][sem];
     const prefix  = isConc ? 'C' : 'N';
     const suggested = `${prefix}${current.length + 1}`;
@@ -1241,7 +1471,7 @@ class GradeBook {
     const subject  = subjects.find(s => s.id === sId);
     const students = this.state.students[cId] || [];
     const evs      = this.state.evaluations[cId][sId];
-    const isConc   = CONCEPTUAL_SUBJECTS.has(sId);
+    const isConc   = this._isConceptual(sId);
 
     const esc = v => `"${String(v).replace(/"/g,'""')}"`;
     const header = [
@@ -1276,8 +1506,9 @@ class GradeBook {
   // ── Modal ────────────────────────────────────────────────────────────────────
 
   showModal({ title, body, confirm, confirmDanger, onConfirm }) {
-    const backdrop = document.getElementById('modal-backdrop');
-    const modal    = document.getElementById('modal');
+    const backdrop    = document.getElementById('modal-backdrop');
+    const modal       = document.getElementById('modal');
+    const safeConfirm = onConfirm || (() => this.hideModal());
 
     modal.innerHTML = `
       <div class="modal-header">
@@ -1301,10 +1532,10 @@ class GradeBook {
     const close = () => this.hideModal();
     document.getElementById('m-close').onclick   = close;
     document.getElementById('m-cancel').onclick  = close;
-    document.getElementById('m-confirm').onclick = onConfirm;
+    document.getElementById('m-confirm').onclick = safeConfirm;
     backdrop.onclick = close;
     modal.onkeydown  = e => {
-      if (e.key === 'Enter')  { e.preventDefault(); onConfirm(); }
+      if (e.key === 'Enter')  { e.preventDefault(); safeConfirm(); }
       if (e.key === 'Escape') close();
     };
   }
@@ -1338,6 +1569,11 @@ class GradeBook {
       'download':   `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v7M4 6l2.5 2.5L9 6M1 10v.5A1.5 1.5 0 002.5 12h8A1.5 1.5 0 0012 10.5V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
       'add-person': `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="4.5" r="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M1.5 12c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="11" y1="1.5" x2="11" y2="5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="9" y1="3.5" x2="13" y2="3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
       'deudores':   `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="4" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M1 12c0-3 2.5-5 5.5-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="10.5" cy="10.5" r="2" stroke="currentColor" stroke-width="1.4"/><line x1="10.5" y1="9.5" x2="10.5" y2="10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="10.5" cy="11.5" r="0.3" fill="currentColor"/></svg>`,
+      'backup':     `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1.5v6M4 5.5l2.5 2.5L9 5.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><rect x="1" y="9" width="11" height="3" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>`,
+      'restore':    `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 7A4 4 0 106.5 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M2.5 3.5v3.5H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+      'clases':     `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="2" width="11" height="3" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="7" width="11" height="3" rx="1" stroke="currentColor" stroke-width="1.3"/><line x1="3" y1="3.5" x2="5" y2="3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="3" y1="8.5" x2="5" y2="8.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+      'import':     `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v7M4.5 6L7 8.5 9.5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 10h3.5M9.5 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="4" y="9" width="6" height="3" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>`,
+      'drive':      `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M4.5 9.5l-3-5.5h7l3 5.5H4.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M1.5 4L5 9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M11.5 4L8 9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
     };
     return icons[name] || '';
   }
@@ -1354,10 +1590,10 @@ class GradeBook {
   _getDeudores() {
     const result = [];
 
-    DEFAULT_COURSES.forEach(c => {
+    this.state.courses.forEach(c => {
       const students = this.state.students[c.id] || [];
       if (!students.length) return;
-      const subjIds = COURSE_SUBJECTS[c.id] || ['s1'];
+      const subjIds = this._courseSubjects(c.id);
 
       // Determinar qué columnas están "activas" (al menos 1 alumno con nota)
       const active = {}; // active[sId][sem] = Set<evalName>
@@ -1391,7 +1627,7 @@ class GradeBook {
             });
             if (missing.length) pending.push({
               subjectName: subject?.name || sId,
-              isConc:      CONCEPTUAL_SUBJECTS.has(sId),
+              isConc:      this._isConceptual(sId),
               sem,
               evals:       missing,
             });
@@ -1771,6 +2007,627 @@ class GradeBook {
     a.click();
     URL.revokeObjectURL(url);
     this.toast('Observaciones exportadas ✓');
+  }
+
+  // ── Mis Clases (gestión de cursos y asignaturas) ─────────────────────────────
+
+  renderMisClases() {
+    const { courses, subjects } = this.state;
+
+    const courseRows = courses.map((c, idx) => {
+      const subjIds   = this._courseSubjects(c.id);
+      const subjNames = subjIds.map(sId => {
+        const s = subjects.find(s => s.id === sId);
+        return s ? `<span class="mc-subj-tag${s.isConceptual ? ' mc-subj-conc' : ''}">${this._esc(s.name)}</span>` : '';
+      }).join('');
+      const studentCount = (this.state.students[c.id] || []).length;
+
+      return `
+        <div class="mc-course-row">
+          <div class="mc-course-left">
+            <span class="mc-course-num">${idx + 1}</span>
+            <div class="mc-course-info">
+              <span class="mc-course-name">${this._esc(c.name)}</span>
+              <div class="mc-subj-list">
+                ${subjNames || '<span class="mc-no-subj">Sin asignaturas</span>'}
+                ${c.hasTaller ? '<span class="mc-subj-tag mc-subj-taller">Taller JEC</span>' : ''}
+              </div>
+            </div>
+          </div>
+          <div class="mc-course-right">
+            <span class="mc-student-count">${studentCount} alumno${studentCount !== 1 ? 's' : ''}</span>
+            <button class="mc-btn mc-btn-edit" data-action="edit-course" data-course="${c.id}" title="Editar clase">✎</button>
+            <button class="mc-btn mc-btn-del" data-action="del-course" data-course="${c.id}" title="Eliminar clase">×</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="topbar">
+        <div class="breadcrumb"><span class="bc-overview">Mis Clases</span></div>
+        <div class="topbar-actions">
+          <button class="btn-add" data-action="add-course">+ Nueva clase</button>
+        </div>
+      </div>
+      <div class="mc-body">
+        ${courses.length === 0
+          ? `<div class="mc-empty"><p>Sin clases aún. Haz clic en <strong>+ Nueva clase</strong> para comenzar.</p></div>`
+          : `<div class="mc-course-list">${courseRows}</div>`}
+        <div class="mc-subjects-panel">
+          <div class="mc-subjects-title">Asignaturas disponibles</div>
+          <div class="mc-subjects-list">
+            ${subjects.map(s => `
+              <div class="mc-subject-row">
+                <span class="mc-subj-tag${s.isConceptual ? ' mc-subj-conc' : ''}">${this._esc(s.name)}</span>
+                ${s.isConceptual ? '<span class="mc-subj-hint">I·S·B·MB</span>' : '<span class="mc-subj-hint">Numérica</span>'}
+                <button class="mc-btn mc-btn-edit" data-action="edit-subject" data-subject="${s.id}" title="Editar">✎</button>
+                <button class="mc-btn mc-btn-del" data-action="del-subject" data-subject="${s.id}" title="Eliminar">×</button>
+              </div>`).join('')}
+          </div>
+          <button class="mc-add-subj-btn" data-action="add-subject">+ Nueva asignatura</button>
+        </div>
+      </div>`;
+  }
+
+  _promptAddCourse() {
+    const { subjects } = this.state;
+    const subjCheckboxes = subjects.map(s => `
+      <label class="mc-modal-check">
+        <input type="checkbox" name="subj" value="${s.id}" checked>
+        ${this._esc(s.name)}${s.isConceptual ? ' <em>(I·S·B·MB)</em>' : ''}
+      </label>`).join('');
+
+    this.showModal({
+      title: 'Nueva clase',
+      body: `
+        <label class="modal-label">Nombre de la clase</label>
+        <input type="text" id="m-input" class="modal-input" placeholder="Ej: 3° Básico Matemática" autofocus>
+        <label class="modal-label" style="margin-top:14px">Asignaturas</label>
+        <div class="mc-modal-checks">${subjCheckboxes}</div>
+        <label class="mc-modal-check" style="margin-top:8px">
+          <input type="checkbox" id="m-taller"> Tiene Taller JEC (bitácora)
+        </label>`,
+      confirm: 'Crear',
+      onConfirm: () => {
+        const name = document.getElementById('m-input').value.trim();
+        if (!name) return;
+        const checked  = [...document.querySelectorAll('input[name="subj"]:checked')].map(el => el.value);
+        const hasTaller = document.getElementById('m-taller')?.checked || false;
+        this._addCourse(name, checked, hasTaller);
+        this.hideModal();
+      }
+    });
+  }
+
+  _addCourse(name, subjIds, hasTaller) {
+    const id = `c_${Date.now()}`;
+    this.state.courses.push({ id, name, hasTaller });
+    this.state.courseSubjects[id] = subjIds.length ? subjIds : ['s1'];
+    this.state.students[id]    = [];
+    this.state.grades[id]      = {};
+    this.state.evaluations[id] = {};
+    subjIds.forEach(sId => {
+      const isConc    = this._isConceptual(sId);
+      const baseEvals = isConc ? ['C1','C2','C3','C4'] : ['N1','N2','N3'];
+      this.state.evaluations[id][sId] = { s1:[...baseEvals], s2:[...baseEvals] };
+      this.state.grades[id][sId] = {};
+    });
+    this.save(); this.render();
+    this.toast(`Clase "${name}" creada`);
+  }
+
+  _promptEditCourse(cId) {
+    const course = this.state.courses.find(c => c.id === cId);
+    if (!course) return;
+    const { subjects } = this.state;
+    const current = this._courseSubjects(cId);
+    const subjCheckboxes = subjects.map(s => `
+      <label class="mc-modal-check">
+        <input type="checkbox" name="subj" value="${s.id}"${current.includes(s.id) ? ' checked' : ''}>
+        ${this._esc(s.name)}${s.isConceptual ? ' <em>(I·S·B·MB)</em>' : ''}
+      </label>`).join('');
+
+    this.showModal({
+      title: 'Editar clase',
+      body: `
+        <label class="modal-label">Nombre de la clase</label>
+        <input type="text" id="m-input" class="modal-input" value="${this._esc(course.name)}" autofocus>
+        <label class="modal-label" style="margin-top:14px">Asignaturas</label>
+        <div class="mc-modal-checks">${subjCheckboxes}</div>
+        <label class="mc-modal-check" style="margin-top:8px">
+          <input type="checkbox" id="m-taller"${course.hasTaller ? ' checked' : ''}> Tiene Taller JEC (bitácora)
+        </label>`,
+      confirm: 'Guardar',
+      onConfirm: () => {
+        const name = document.getElementById('m-input').value.trim();
+        if (!name) { this.hideModal(); return; }
+        const checked   = [...document.querySelectorAll('input[name="subj"]:checked')].map(el => el.value);
+        const hasTaller = document.getElementById('m-taller')?.checked || false;
+        course.name     = name;
+        course.hasTaller = hasTaller;
+        // Inicializar asignaturas nuevas que no existían
+        const newSubjs = checked.filter(sId => !current.includes(sId));
+        newSubjs.forEach(sId => {
+          const isConc    = this._isConceptual(sId);
+          const baseEvals = isConc ? ['C1','C2','C3','C4'] : ['N1','N2','N3'];
+          if (!this.state.evaluations[cId][sId])
+            this.state.evaluations[cId][sId] = { s1:[...baseEvals], s2:[...baseEvals] };
+          if (!this.state.grades[cId][sId]) this.state.grades[cId][sId] = {};
+          (this.state.students[cId] || []).forEach(st => {
+            if (!this.state.grades[cId][sId][st.id])
+              this.state.grades[cId][sId][st.id] = { s1:{}, s2:{} };
+          });
+        });
+        this.state.courseSubjects[cId] = checked.length ? checked : [current[0] || 's1'];
+        this.save(); this.hideModal(); this.render();
+        this.toast(`Clase "${name}" actualizada`);
+      }
+    });
+  }
+
+  _confirmDeleteCourse(cId) {
+    const course = this.state.courses.find(c => c.id === cId);
+    if (!course) return;
+    const studentCount = (this.state.students[cId] || []).length;
+    this.showModal({
+      title: 'Eliminar clase',
+      body: `<p class="confirm-message">¿Eliminar la clase <strong>${this._esc(course.name)}</strong>?<br><br>
+             Se perderán <strong>${studentCount} alumno${studentCount !== 1 ? 's' : ''}</strong> y todas sus calificaciones, observaciones y datos.<br>
+             Esta acción no se puede deshacer.</p>`,
+      confirm: 'Eliminar', confirmDanger: true,
+      onConfirm: () => {
+        this.state.courses = this.state.courses.filter(c => c.id !== cId);
+        delete this.state.courseSubjects[cId];
+        delete this.state.students[cId];
+        delete this.state.grades[cId];
+        delete this.state.evaluations[cId];
+        delete this.state.taller[cId];
+        delete this.state.observations[cId];
+        if (this.state.activeCourse === cId)
+          this.state.activeCourse = this.state.courses[0]?.id || null;
+        this.save(); this.hideModal(); this.render();
+        this.toast(`Clase "${course.name}" eliminada`);
+      }
+    });
+  }
+
+  _promptAddSubject() {
+    this.showModal({
+      title: 'Nueva asignatura',
+      body: `
+        <label class="modal-label">Nombre de la asignatura</label>
+        <input type="text" id="m-input" class="modal-input" placeholder="Ej: Matemática" autofocus>
+        <label class="mc-modal-check" style="margin-top:12px">
+          <input type="checkbox" id="m-conc"> Calificación conceptual (I / S / B / MB)
+        </label>
+        <div class="modal-hint" style="margin-top:6px">Si no marcas esta opción, las notas serán numéricas (2.0 – 7.0).</div>`,
+      confirm: 'Crear',
+      onConfirm: () => {
+        const name = document.getElementById('m-input').value.trim();
+        if (!name) return;
+        const isConceptual = document.getElementById('m-conc')?.checked || false;
+        const id = `s_${Date.now()}`;
+        this.state.subjects.push({ id, name, isConceptual });
+        this.save(); this.hideModal(); this.render();
+        this.toast(`Asignatura "${name}" creada`);
+      }
+    });
+  }
+
+  _promptEditSubject(sId) {
+    const subj = this.state.subjects.find(s => s.id === sId);
+    if (!subj) return;
+    this.showModal({
+      title: 'Editar asignatura',
+      body: `
+        <label class="modal-label">Nombre</label>
+        <input type="text" id="m-input" class="modal-input" value="${this._esc(subj.name)}" autofocus>
+        <label class="mc-modal-check" style="margin-top:12px">
+          <input type="checkbox" id="m-conc"${subj.isConceptual ? ' checked' : ''}> Calificación conceptual (I / S / B / MB)
+        </label>`,
+      confirm: 'Guardar',
+      onConfirm: () => {
+        const name = document.getElementById('m-input').value.trim();
+        if (!name) { this.hideModal(); return; }
+        subj.name = name;
+        subj.isConceptual = document.getElementById('m-conc')?.checked || false;
+        this.save(); this.hideModal(); this.render();
+        this.toast('Asignatura actualizada');
+      }
+    });
+  }
+
+  _confirmDeleteSubject(sId) {
+    const subj = this.state.subjects.find(s => s.id === sId);
+    if (!subj) return;
+    const usedIn = this.state.courses.filter(c => this._courseSubjects(c.id).includes(sId)).map(c => c.name);
+    const warnText = usedIn.length
+      ? `<br><br>⚠ Está asignada a: <strong>${usedIn.join(', ')}</strong>. Se perderán todas sus calificaciones.`
+      : '';
+    this.showModal({
+      title: 'Eliminar asignatura',
+      body: `<p class="confirm-message">¿Eliminar la asignatura <strong>${this._esc(subj.name)}</strong>?${warnText}</p>`,
+      confirm: 'Eliminar', confirmDanger: true,
+      onConfirm: () => {
+        // Quitar de courseSubjects y datos de grades/evaluations
+        this.state.courses.forEach(c => {
+          this.state.courseSubjects[c.id] = (this.state.courseSubjects[c.id] || []).filter(id => id !== sId);
+          delete this.state.grades[c.id]?.[sId];
+          delete this.state.evaluations[c.id]?.[sId];
+        });
+        this.state.subjects = this.state.subjects.filter(s => s.id !== sId);
+        // Si el activeSubject era esta asignatura, resetear
+        if (this.state.activeSubject === sId)
+          this.state.activeSubject = this._courseSubjects(this.state.activeCourse)[0] || null;
+        this.save(); this.hideModal(); this.render();
+        this.toast(`Asignatura "${subj.name}" eliminada`);
+      }
+    });
+  }
+
+  // ── Backup ───────────────────────────────────────────────────────────────────
+
+  _exportBackup() {
+    const data = localStorage.getItem(STORE_KEY);
+    if (!data) { this.toast('No hay datos para respaldar', 'warn'); return; }
+    const date = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([data], { type: 'application/json;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), {
+      href: url, download: `LibroNotas_respaldo_${date}.json`,
+    });
+    a.click();
+    URL.revokeObjectURL(url);
+    localStorage.setItem(BACKUP_KEY, date);
+    this._refreshBackupBanner();
+    this.showModal({
+      title: 'Respaldo descargado ✓',
+      body: `
+        <p class="confirm-message" style="margin-bottom:14px">
+          El archivo <strong>LibroNotas_respaldo_${date}.json</strong> fue guardado en tu carpeta de <strong>Descargas</strong>.
+        </p>
+        <div class="backup-help-steps">
+          <div class="backup-help-step">
+            <span class="backup-help-num">1</span>
+            <span>Busca el archivo en <strong>Descargas</strong> de tu computador.</span>
+          </div>
+          <div class="backup-help-step">
+            <span class="backup-help-num">2</span>
+            <span>Muévelo a un lugar seguro: una carpeta en <strong>Google Drive</strong>, <strong>OneDrive</strong>, o un pendrive.</span>
+          </div>
+          <div class="backup-help-step">
+            <span class="backup-help-num">3</span>
+            <span>Si alguna vez pierdes los datos, usa el botón <strong>Restaurar</strong> y selecciona ese archivo.</span>
+          </div>
+        </div>`,
+      confirm: 'Entendido',
+      onConfirm: () => this.hideModal(),
+    });
+  }
+
+  _showBackupHelp() {
+    this.showModal({
+      title: '¿Cómo funciona el respaldo?',
+      body: `
+        <div class="backup-help-steps">
+          <div class="backup-help-step">
+            <span class="backup-help-num">📁</span>
+            <span><strong>¿Qué se descarga?</strong><br>
+            Un archivo llamado <em>LibroNotas_respaldo_FECHA.json</em> que contiene todos tus datos: alumnos, notas, evaluaciones y observaciones.</span>
+          </div>
+          <div class="backup-help-step">
+            <span class="backup-help-num">💾</span>
+            <span><strong>¿Dónde queda?</strong><br>
+            En la carpeta <strong>Descargas</strong> de tu computador. Se recomienda moverlo después a <strong>Google Drive</strong> o <strong>OneDrive</strong> para mayor seguridad.</span>
+          </div>
+          <div class="backup-help-step">
+            <span class="backup-help-num">🔄</span>
+            <span><strong>¿Cómo restauro si pierdo los datos?</strong><br>
+            Abre la app, haz clic en <strong>Restaurar</strong>, selecciona el archivo .json y confirma. En segundos tienes todo de vuelta.</span>
+          </div>
+          <div class="backup-help-step">
+            <span class="backup-help-num">💻</span>
+            <span><strong>¿Funciona en otro computador o navegador?</strong><br>
+            Sí. Copia el archivo al otro equipo (por pendrive o Google Drive), abre la app y usa <strong>Restaurar</strong>.</span>
+          </div>
+          <div class="backup-help-step">
+            <span class="backup-help-num">⚠</span>
+            <span><strong>¿Qué pasa si no tengo respaldo y borro el historial?</strong><br>
+            Los datos se pierden sin recuperación posible. Por eso es importante crear respaldo cada vez que hagas cambios importantes.</span>
+          </div>
+        </div>`,
+      confirm: 'Entendido',
+      onConfirm: () => this.hideModal(),
+    });
+  }
+
+  _importBackup() {
+    const input = document.createElement('input');
+    input.type   = 'file';
+    input.accept = '.json,application/json';
+    input.addEventListener('change', () => {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target.result);
+          if (!parsed || typeof parsed !== 'object' || (!parsed.students && !parsed.grades)) {
+            this.toast('Archivo inválido: no parece un respaldo del Libro de Notas', 'warn');
+            return;
+          }
+          this.showModal({
+            title: 'Restaurar respaldo',
+            body: `<p class="confirm-message">¿Restaurar el archivo <strong>${this._esc(file.name)}</strong>?<br><br>
+                   <strong>Se reemplazarán todos los datos actuales.</strong><br>
+                   Esta acción no se puede deshacer.</p>`,
+            confirm: 'Restaurar', confirmDanger: true,
+            onConfirm: () => {
+              localStorage.setItem(STORE_KEY, ev.target.result);
+              this.hideModal();
+              this.load();
+              this.render();
+              this.toast('Respaldo restaurado correctamente ✓');
+            }
+          });
+        } catch {
+          this.toast('Error al leer el archivo. Verifica que sea un respaldo válido.', 'warn');
+        }
+      };
+      reader.readAsText(file);
+    });
+    input.click();
+  }
+
+  _getDaysSinceBackup() {
+    const last = localStorage.getItem(BACKUP_KEY);
+    if (!last) return null;
+    const diff = Date.now() - new Date(last).getTime();
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+  }
+
+  _renderBackupBanner() {
+    const last = localStorage.getItem(BACKUP_KEY);
+    const days = this._getDaysSinceBackup();
+    if (last === null) {
+      return `<div class="backup-banner" id="backup-banner">
+        <span class="backup-banner-msg">⚠ Sin respaldo guardado — si borras el historial del navegador perderás todos tus datos.</span>
+        <button class="backup-banner-btn" data-action="export-backup">Crear respaldo ahora</button>
+        <button class="backup-banner-close" data-action="dismiss-backup-banner" title="Cerrar">×</button>
+      </div>`;
+    }
+    if (days >= BACKUP_WARNING_DAYS) {
+      return `<div class="backup-banner" id="backup-banner">
+        <span class="backup-banner-msg">⚠ Último respaldo hace <strong>${days} días</strong>. Recuerda guardar una copia actualizada.</span>
+        <button class="backup-banner-btn" data-action="export-backup">Actualizar respaldo</button>
+        <button class="backup-banner-close" data-action="dismiss-backup-banner" title="Cerrar">×</button>
+      </div>`;
+    }
+    return '';
+  }
+
+  _refreshBackupBanner() {
+    const existing = document.getElementById('backup-banner');
+    const newBanner = this._renderBackupBanner();
+    if (existing) {
+      if (newBanner) {
+        const t = document.createElement('template');
+        t.innerHTML = newBanner;
+        existing.replaceWith(t.content.firstElementChild);
+      } else {
+        existing.remove();
+      }
+    }
+    // Actualizar estado en sidebar
+    const statusEl = document.querySelector('.sb-backup-status');
+    if (statusEl) {
+      const days = this._getDaysSinceBackup();
+      statusEl.className = 'sb-backup-status sb-backup-ok';
+      statusEl.textContent = 'Respaldo de hoy ✓';
+      if (days === null) { statusEl.className = 'sb-backup-status sb-backup-never'; statusEl.textContent = 'Sin respaldo — datos en riesgo'; }
+      else if (days >= BACKUP_WARNING_DAYS) { statusEl.className = 'sb-backup-status sb-backup-warn'; statusEl.textContent = `Respaldo hace ${days} día${days !== 1 ? 's' : ''}`; }
+    }
+  }
+
+  // ── Google Drive ─────────────────────────────────────────────────────────────
+
+  _gdriveGetStored() {
+    try { return JSON.parse(localStorage.getItem(GDRIVE_TOKEN_KEY) || 'null'); } catch { return null; }
+  }
+  _gdriveSaveStored(data) {
+    localStorage.setItem(GDRIVE_TOKEN_KEY, JSON.stringify(data));
+  }
+  _gdriveClearStored() {
+    localStorage.removeItem(GDRIVE_TOKEN_KEY);
+  }
+  _gdriveTokenValid() {
+    const t = this._gdriveGetStored();
+    return !!(t?.access_token && Date.now() < t.expiry);
+  }
+
+  _formatRelativeDate(ts) {
+    const diff = Date.now() - ts;
+    const m = Math.floor(diff / 60000);
+    if (m < 2)   return 'hace un momento';
+    if (m < 60)  return `hace ${m} min`;
+    const h = Math.floor(m / 60);
+    if (h < 24)  return `hace ${h}h`;
+    const d = Math.floor(h / 24);
+    return d === 1 ? 'ayer' : `hace ${d} días`;
+  }
+
+  _renderDriveSection() {
+    const stored = this._gdriveGetStored();
+    const valid  = this._gdriveTokenValid();
+
+    if (!valid) {
+      const wasConnected = !!(stored?.wasConnected);
+      return `
+        <div class="sb-drive-section">
+          <button class="sb-btn sb-btn-drive" data-action="gdrive-connect">
+            ${this._icon('drive')} ${wasConnected ? 'Reconectar Drive' : 'Conectar Google Drive'}
+          </button>
+        </div>`;
+    }
+
+    const email    = stored.email ? `<span class="sb-drive-email">${this._esc(stored.email)}</span>` : '';
+    const syncText = stored.lastSync
+      ? `Sync ${this._formatRelativeDate(stored.lastSync)}`
+      : 'Sin sincronización aún';
+
+    return `
+      <div class="sb-drive-section sb-drive-connected">
+        <div class="sb-drive-header">
+          ${this._icon('drive')}
+          <div class="sb-drive-info">
+            <span class="sb-drive-title">Google Drive</span>
+            ${email}
+          </div>
+          <button class="sb-drive-disconnect" data-action="gdrive-disconnect" title="Desconectar">×</button>
+        </div>
+        <div class="sb-drive-sync-label">${this._esc(syncText)}</div>
+        <div class="sb-drive-actions">
+          <button class="sb-btn sb-btn-drive-save" data-action="gdrive-save">↑ Guardar</button>
+          <button class="sb-btn sb-btn-drive-load" data-action="gdrive-load">↓ Restaurar</button>
+        </div>
+      </div>`;
+  }
+
+  _gdriveConnect() {
+    if (!window.google?.accounts?.oauth2) {
+      this.toast('La librería de Google no está disponible. Verifica tu conexión.');
+      return;
+    }
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: GDRIVE_CLIENT_ID,
+      scope:     GDRIVE_SCOPE,
+      callback:  async (resp) => {
+        if (resp.error) { this.toast('Error al conectar con Google'); return; }
+        let email = '';
+        try {
+          const info = await fetch(
+            `https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${resp.access_token}`
+          ).then(r => r.json());
+          email = info.email || '';
+        } catch { /* email stays empty */ }
+        this._gdriveSaveStored({
+          access_token: resp.access_token,
+          expiry:       Date.now() + (parseInt(resp.expires_in) - 60) * 1000,
+          email,
+          wasConnected: true,
+        });
+        this.render();
+        this.toast('Google Drive conectado ✓');
+      },
+    });
+    // Try silent reconnect if was previously connected
+    const stored = this._gdriveGetStored();
+    client.requestAccessToken({ prompt: stored?.wasConnected ? '' : 'consent' });
+  }
+
+  _gdriveDisconnect() {
+    this.showModal({
+      title: 'Desconectar Google Drive',
+      body:  `<p class="confirm-message">¿Desconectar Google Drive? Tus datos no se eliminarán de Drive. Siempre podrás volver a conectar.</p>`,
+      confirm: 'Desconectar',
+      onConfirm: () => {
+        const stored = this._gdriveGetStored();
+        if (stored?.access_token && window.google?.accounts?.oauth2) {
+          try { google.accounts.oauth2.revoke(stored.access_token); } catch { /* ok */ }
+        }
+        this._gdriveClearStored();
+        this.hideModal();
+        this.render();
+        this.toast('Google Drive desconectado');
+      }
+    });
+  }
+
+  async _gdriveSave() {
+    if (!this._gdriveTokenValid()) { this._gdriveConnect(); return; }
+    const token   = this._gdriveGetStored().access_token;
+    const payload = JSON.stringify(this.state, null, 2);
+    this.toast('Guardando en Google Drive…');
+    try {
+      // Buscar archivo existente
+      const searchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'${GDRIVE_FILE_NAME}'&fields=files(id)`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const { files } = await searchRes.json();
+      const fileId = files?.[0]?.id || null;
+
+      // Multipart body
+      const boundary = 'lb_gdrive_boundary';
+      const meta     = JSON.stringify({ name: GDRIVE_FILE_NAME, ...(fileId ? {} : { parents: ['appDataFolder'] }) });
+      const body     = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${payload}\r\n--${boundary}--`;
+
+      const url    = fileId
+        ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
+        : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+      const method = fileId ? 'PATCH' : 'POST';
+
+      const uploadRes = await fetch(url, {
+        method,
+        headers: {
+          Authorization:  `Bearer ${token}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+        },
+        body,
+      });
+      if (!uploadRes.ok) throw new Error(uploadRes.statusText);
+
+      const stored = this._gdriveGetStored();
+      stored.lastSync = Date.now();
+      this._gdriveSaveStored(stored);
+      this.render();
+      this.toast('Guardado en Google Drive ✓');
+    } catch (err) {
+      this.toast('Error al guardar en Drive. Intenta reconectar.');
+      console.error('[Drive save]', err);
+    }
+  }
+
+  async _gdriveLoad() {
+    if (!this._gdriveTokenValid()) { this._gdriveConnect(); return; }
+    const token = this._gdriveGetStored().access_token;
+    try {
+      const searchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'${GDRIVE_FILE_NAME}'&fields=files(id,modifiedTime)`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const { files } = await searchRes.json();
+      const file = files?.[0];
+      if (!file) { this.toast('No hay respaldo en Google Drive todavía'); return; }
+
+      const modLabel = new Date(file.modifiedTime).toLocaleDateString('es-CL', {
+        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+
+      this.showModal({
+        title: 'Restaurar desde Google Drive',
+        body:  `<p class="confirm-message">Se restaurará el respaldo del <strong>${modLabel}</strong>.<br><br>Esto reemplazará <em>todos</em> los datos actuales. ¿Continuar?</p>`,
+        confirm: 'Restaurar', confirmDanger: true,
+        onConfirm: async () => {
+          try {
+            const fileRes = await fetch(
+              `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const restored = await fileRes.json();
+            this.state = restored;
+            this.save();
+            this.hideModal();
+            this.render();
+            this.toast('Datos restaurados desde Google Drive ✓');
+          } catch {
+            this.toast('Error al restaurar desde Drive');
+          }
+        }
+      });
+    } catch {
+      this.toast('Error al conectar con Google Drive. Intenta reconectar.');
+    }
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────────

@@ -3,17 +3,45 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Libro de Calificaciones</title>
+  <title>Libro Digital de Notas | Gestión de Calificaciones para Docentes</title>
+  <meta name="description" content="Libro Digital de Notas para profesores de educación básica y media en Chile. Gestiona calificaciones, asistencia y observaciones de tus alumnos de forma simple y rápida.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Libro Digital de Notas — Gestión de Calificaciones para Docentes">
+  <meta property="og:description" content="Herramienta simple y rápida para registrar notas, asistencia y observaciones. Diseñada para profesores chilenos de educación básica y media.">
+  <meta property="og:type" content="website">
+
+  <!-- Twitter/X Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Libro Digital de Notas — Gestión de Calificaciones para Docentes">
+  <meta name="twitter:description" content="Herramienta simple y rápida para registrar notas, asistencia y observaciones.">
+
+  <link rel="canonical" href="https://noscuenta.github.io/libro-notas-profesor/">
+  <meta property="og:url" content="https://noscuenta.github.io/libro-notas-profesor/">
+  <meta property="og:image" content="https://noscuenta.github.io/libro-notas-profesor/logo-colegio.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Crimson+Pro:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Libro Digital de Notas",
+    "description": "Herramienta de gestión de calificaciones para docentes chilenos de educación básica y media",
+    "url": "https://noscuenta.github.io/libro-notas-profesor/",
+    "applicationCategory": "EducationApplication",
+    "operatingSystem": "Any",
+    "offers": { "@type": "Offer", "price": "0" }
+  }
+  </script>
 </head>
 <body>
   <div id="app"></div>
   <div id="modal-backdrop" class="modal-backdrop hidden"></div>
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async></script>
+  <script src="app.js" defer></script>
 </body>
 </html>

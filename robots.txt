@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://noscuenta.github.io/libro-notas-profesor/sitemap.xml
