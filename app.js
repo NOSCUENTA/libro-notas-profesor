@@ -3237,9 +3237,10 @@ class GradeBook {
     const isLast  = this._tourStep === total - 1;
     const isFirst = this._tourStep === 0;
 
-    // Overlay
+    // Overlay (background only for steps without a spotlight)
     const overlay = document.createElement('div');
     overlay.id = 'tour-overlay';
+    if (!step.target) overlay.style.background = 'rgba(0,0,0,0.65)';
     document.body.appendChild(overlay);
 
     // Spotlight + bounding rect
