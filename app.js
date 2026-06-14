@@ -1363,8 +1363,13 @@ class GradeBook {
     const toAdd = rawNames.filter(n => !existingNames.has(n.toLowerCase().trim()));
     const dupes = rawNames.filter(n =>  existingNames.has(n.toLowerCase().trim()));
 
-    const addHtml = toAdd.map(n =>
-      `<li class="import-preview-item import-preview-add">${this._esc(n)}</li>`).join('');
+    const addHtml = toAdd.map((n, i) =>
+      `<li class="import-preview-item import-preview-add">
+         <label class="import-preview-check">
+           <input type="checkbox" name="import-st" value="${i}" checked>
+           ${this._esc(n)}
+         </label>
+       </li>`).join('');
     const dupeHtml = dupes.map(n =>
       `<li class="import-preview-item import-preview-dupe">${this._esc(n)}</li>`).join('');
 
@@ -1374,7 +1379,7 @@ class GradeBook {
         ${toAdd.length
           ? `<div class="import-preview-label">
                <span class="import-preview-badge import-preview-badge-add">${toAdd.length}</span>
-               alumno${toAdd.length !== 1 ? 's' : ''} nuevo${toAdd.length !== 1 ? 's' : ''}:
+               alumno${toAdd.length !== 1 ? 's' : ''} nuevo${toAdd.length !== 1 ? 's' : ''} — desmarca los que no quieras agregar:
              </div>
              <ul class="import-preview-list">${addHtml}</ul>`
           : `<p class="modal-hint">No hay alumnos nuevos para agregar.</p>`}
@@ -1387,8 +1392,11 @@ class GradeBook {
           : ''}`,
       confirm: toAdd.length ? `Importar ${toAdd.length} alumno${toAdd.length !== 1 ? 's' : ''}` : 'Cerrar',
       onConfirm: !toAdd.length ? () => this.hideModal() : () => {
+        const selected = [...document.querySelectorAll('input[name="import-st"]:checked')]
+          .map(el => toAdd[parseInt(el.value)]);
+        if (!selected.length) { this.hideModal(); return; }
         const subjIds = this._courseSubjects(cId);
-        toAdd.forEach(name => {
+        selected.forEach(name => {
           const id = `${cId}_st_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
           (this.state.students[cId] = this.state.students[cId] || []).push({ id, name });
           subjIds.forEach(sId => {
@@ -1397,7 +1405,7 @@ class GradeBook {
           });
         });
         this.save(); this.hideModal(); this.render();
-        this.toast(`${toAdd.length} alumno${toAdd.length !== 1 ? 's' : ''} importado${toAdd.length !== 1 ? 's' : ''}`);
+        this.toast(`${selected.length} alumno${selected.length !== 1 ? 's' : ''} importado${selected.length !== 1 ? 's' : ''}`);
       }
     });
   }
