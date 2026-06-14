@@ -953,6 +953,8 @@ class GradeBook {
 
     } else if (a === 'add-subject') {
       this._promptAddSubject();
+    } else if (a === 'assign-subject') {
+      this._promptAssignSubject(el.dataset.subject);
     } else if (a === 'edit-subject') {
       this._promptEditSubject(el.dataset.subject);
     } else if (a === 'del-subject') {
@@ -2148,6 +2150,7 @@ class GradeBook {
               <div class="mc-subject-row">
                 <span class="mc-subj-tag${s.isConceptual ? ' mc-subj-conc' : ''}">${this._esc(s.name)}</span>
                 ${s.isConceptual ? '<span class="mc-subj-hint">I·S·B·MB</span>' : '<span class="mc-subj-hint">Numérica</span>'}
+                <button class="mc-btn mc-btn-assign" data-action="assign-subject" data-subject="${s.id}" title="Asignar a cursos">+</button>
                 <button class="mc-btn mc-btn-edit" data-action="edit-subject" data-subject="${s.id}" title="Editar">✎</button>
                 <button class="mc-btn mc-btn-del" data-action="del-subject" data-subject="${s.id}" title="Eliminar">×</button>
               </div>`).join('')}
@@ -2328,6 +2331,46 @@ class GradeBook {
         });
         this.save(); this.hideModal(); this.render();
         this.toast(`Asignatura "${name}" creada`);
+      }
+    });
+  }
+
+  _promptAssignSubject(sId) {
+    const subj = this.state.subjects.find(s => s.id === sId);
+    if (!subj) return;
+    const { courses } = this.state;
+    if (!courses.length) { this.toast('No hay cursos aún'); return; }
+    this.showModal({
+      title: `Asignar "${subj.name}" a clases`,
+      body: `
+        <label class="modal-label">Selecciona los cursos</label>
+        <div class="mc-modal-checks">
+          ${courses.map(c => {
+            const already = (this.state.courseSubjects[c.id] || []).includes(sId);
+            return `<label class="mc-modal-check">
+              <input type="checkbox" name="asign-course" value="${c.id}"${already ? ' checked' : ''}>
+              ${this._esc(c.name)}${already ? ' <em style="color:var(--accent-muted)">(ya asignada)</em>' : ''}
+            </label>`;
+          }).join('')}
+        </div>`,
+      confirm: 'Asignar',
+      onConfirm: () => {
+        const baseEvals = subj.isConceptual ? ['C1','C2','C3','C4'] : ['N1','N2','N3'];
+        const assignTo = [...document.querySelectorAll('input[name="asign-course"]:checked')].map(el => el.value);
+        assignTo.forEach(cId => {
+          if (!this.state.courseSubjects[cId]) this.state.courseSubjects[cId] = [];
+          if (!this.state.courseSubjects[cId].includes(sId))
+            this.state.courseSubjects[cId].push(sId);
+          if (!this.state.evaluations[cId][sId])
+            this.state.evaluations[cId][sId] = { s1:[...baseEvals], s2:[...baseEvals] };
+          if (!this.state.grades[cId][sId]) this.state.grades[cId][sId] = {};
+          (this.state.students[cId] || []).forEach(st => {
+            if (!this.state.grades[cId][sId][st.id])
+              this.state.grades[cId][sId][st.id] = { s1:{}, s2:{} };
+          });
+        });
+        this.save(); this.hideModal(); this.render();
+        this.toast(`"${subj.name}" asignada a ${assignTo.length} clase${assignTo.length !== 1 ? 's' : ''}`);
       }
     });
   }

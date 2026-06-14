@@ -2042,8 +2042,9 @@ tfoot tr {
   cursor: pointer;
   transition: var(--t);
 }
-.mc-btn-edit:hover { background: var(--surface2); color: var(--ink); border-color: var(--border-2); }
-.mc-btn-del:hover  { background: var(--g-fail-bg); color: var(--g-fail-fg); border-color: var(--g-fail-bdr); }
+.mc-btn-edit:hover   { background: var(--surface2); color: var(--ink); border-color: var(--border-2); }
+.mc-btn-del:hover    { background: var(--g-fail-bg); color: var(--g-fail-fg); border-color: var(--g-fail-bdr); }
+.mc-btn-assign:hover { background: var(--g-ok-bg); color: var(--g-ok-fg); border-color: var(--g-ok-bdr); }
 
 /* Panel lateral de asignaturas */
 .mc-subjects-panel {
