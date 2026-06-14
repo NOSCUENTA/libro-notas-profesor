@@ -2665,6 +2665,8 @@ tfoot tr {
   padding: 22px 24px 20px;
   width: 310px;
   max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
   animation: tour-fadein .18s ease;
 }
 #tour-tooltip.tour-centered {

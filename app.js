@@ -3169,8 +3169,13 @@ class GradeBook {
     this._tourSteps = [
       {
         target: null, position: 'center', isWelcome: true,
-        title: '¡Bienvenido/a al Libro Digital de Notas!',
-        desc: 'Te mostramos la app en 5 pasos rápidos.',
+        title: '¡Bienvenido/a!',
+        desc: '¿Cómo te llamas? Lo usaremos para personalizar tu libro.',
+      },
+      {
+        target: null, position: 'center', isModePicker: true,
+        title: '¿Cómo quieres empezar?',
+        desc: 'Puedes comenzar desde cero o explorar la app con datos de ejemplo.',
       },
       {
         target: '.course-list', position: 'right',
@@ -3262,21 +3267,24 @@ class GradeBook {
       const savedName = (this.state.teacherName === 'Profesor/a de Historia') ? '' : (this.state.teacherName || '');
       bodyHtml = `
         <p class="tour-desc">${step.desc}</p>
-        <label class="tour-label">¿Cómo te llamas?</label>
-        <input type="text" id="tour-name" class="tour-input" placeholder="Ej: María González" value="${this._esc(savedName)}">
+        <label class="tour-label">Tu nombre</label>
+        <input type="text" id="tour-name" class="tour-input" placeholder="Ej: María González" value="${this._esc(savedName)}">`;
+    } else if (step.isModePicker) {
+      bodyHtml = `
+        <p class="tour-desc">${step.desc}</p>
         <div class="tour-modes">
           <label class="tour-mode">
             <input type="radio" name="tour-mode" value="fresh" checked>
             <div class="tour-mode-body">
               <strong>🗂️ Empezar desde cero</strong>
-              <span>Sin datos de muestra</span>
+              <span>Sin datos de muestra. Tú defines todo.</span>
             </div>
           </label>
           <label class="tour-mode">
             <input type="radio" name="tour-mode" value="sample">
             <div class="tour-mode-body">
               <strong>👀 Explorar con ejemplos</strong>
-              <span>Ver la app con datos</span>
+              <span>Ver la app con alumnos y notas cargadas.</span>
             </div>
           </label>
         </div>`;
@@ -3334,6 +3342,8 @@ class GradeBook {
       if (step.isWelcome) {
         const name = document.getElementById('tour-name')?.value.trim();
         if (name) { this.state.teacherName = name; this.save(); }
+      }
+      if (step.isModePicker) {
         this._tourMode = document.querySelector('input[name="tour-mode"]:checked')?.value || 'fresh';
       }
       if (isLast) { this._endTour(); return; }
