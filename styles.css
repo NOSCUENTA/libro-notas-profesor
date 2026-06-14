@@ -2643,36 +2643,120 @@ tfoot tr {
 }
 .ov-att-warn { background: #F8D7DA; color: #721C24; border-color: #F5C6CB; }
 
-/* ── Onboarding ──────────────────────────────────────────────────────────── */
-.ob-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 6px;
+/* ── Tour / Onboarding ───────────────────────────────────────────────────── */
+#tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
 }
-.ob-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px;
-  border: 2px solid var(--border);
+#tour-spotlight {
+  position: fixed;
   border-radius: 10px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.65);
+  z-index: 9001;
+  pointer-events: none;
 }
-.ob-card:has(input:checked) {
-  border-color: var(--navy);
-  background: rgba(30,58,95,0.05);
+#tour-tooltip {
+  position: fixed;
+  z-index: 9002;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.1);
+  padding: 22px 24px 20px;
+  width: 310px;
+  max-width: calc(100vw - 32px);
+  animation: tour-fadein .18s ease;
 }
-.ob-card input[type="radio"] { display: none; }
-.ob-card-body {
+#tour-tooltip.tour-centered {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+@keyframes tour-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.tour-head {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
 }
-.ob-card-icon { font-size: 1.4rem; line-height: 1; }
-.ob-card-body strong { font-size: 0.9rem; color: var(--ink); }
-.ob-card-desc { font-size: 0.8rem; color: var(--ink-3); }
+.tour-dots { display: flex; gap: 5px; align-items: center; }
+.tour-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #e0e0e0;
+  transition: background .2s;
+}
+.tour-dot.tour-dot-on { background: var(--navy); }
+.tour-skip {
+  background: none; border: none;
+  font-size: .73rem; color: #aaa;
+  cursor: pointer; padding: 2px 6px;
+  border-radius: 4px; line-height: 1.4;
+}
+.tour-skip:hover { background: #f5f5f5; color: #777; }
+.tour-title {
+  font-family: var(--ff-display);
+  font-size: 1.05rem; font-weight: 600;
+  color: var(--navy);
+  margin: 0 0 6px;
+}
+.tour-desc {
+  font-size: .86rem; color: #555;
+  line-height: 1.55; margin: 0 0 14px;
+}
+.tour-label {
+  display: block;
+  font-size: .73rem; font-weight: 700;
+  color: #999; text-transform: uppercase;
+  letter-spacing: .06em; margin-bottom: 5px;
+}
+.tour-input {
+  width: 100%; box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1.5px solid #ddd; border-radius: 8px;
+  font-size: .9rem; color: #333;
+  margin-bottom: 12px;
+}
+.tour-input:focus { outline: none; border-color: var(--navy); }
+.tour-modes { display: flex; gap: 8px; margin-bottom: 2px; }
+.tour-mode {
+  flex: 1; cursor: pointer; display: block;
+  border: 2px solid #eee; border-radius: 10px;
+  padding: 10px 10px 10px 12px;
+  transition: border-color .15s, background .15s;
+}
+.tour-mode:has(input:checked) {
+  border-color: var(--navy);
+  background: rgba(30,58,95,.05);
+}
+.tour-mode input { display: none; }
+.tour-mode-body { display: flex; flex-direction: column; gap: 3px; }
+.tour-mode-body strong { font-size: .83rem; color: #333; }
+.tour-mode-body span  { font-size: .74rem; color: #888; }
+.tour-nav {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  margin-top: 18px; gap: 8px;
+}
+.tour-btn-pri {
+  background: var(--navy); color: #fff;
+  border: none; border-radius: 8px;
+  padding: 9px 18px;
+  font-size: .86rem; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.tour-btn-pri:hover { background: #2d5a9c; }
+.tour-btn-sec {
+  background: none;
+  border: 1.5px solid #ddd; border-radius: 8px;
+  padding: 8px 14px;
+  font-size: .83rem; color: #666;
+  cursor: pointer; transition: border-color .15s;
+}
+.tour-btn-sec:hover { border-color: #aaa; }
 
 /* ── Recordatorios ───────────────────────────────────────────────────────── */
 .sb-btn-recs-pending { color: #b45309; }

@@ -3160,60 +3160,214 @@ class GradeBook {
     });
   }
 
-  // ── Onboarding ───────────────────────────────────────────────────────────────
+  // ── Tour / Onboarding ────────────────────────────────────────────────────────
 
-  _showOnboarding() {
+  _startTour() {
     if (this.state.onboardingDone) return;
+    this._tourMode = 'fresh';
+    this._tourStep = 0;
+    this._tourSteps = [
+      {
+        target: null, position: 'center', isWelcome: true,
+        title: '¡Bienvenido/a al Libro Digital de Notas!',
+        desc: 'Te mostramos la app en 5 pasos rápidos.',
+      },
+      {
+        target: '.course-list', position: 'right',
+        title: '📚 Tus cursos',
+        desc: 'Aquí aparecen todos tus cursos. Haz clic en uno para expandirlo y ver sus asignaturas.',
+      },
+      {
+        target: '.subject-list', position: 'right',
+        title: '📖 Asignaturas del curso',
+        desc: 'Cada curso puede tener varias asignaturas. Haz clic en una para abrir el libro de notas.',
+        action: () => {
+          if (this.state.courses.length) {
+            this.state.activeCourse = this.state.courses[0].id;
+            this.render();
+          }
+        },
+      },
+      {
+        target: '.table-wrap', position: 'right',
+        title: '📝 Libro de notas',
+        desc: 'Haz clic en cualquier celda para ingresar o editar una nota. Los promedios se calculan automáticamente.',
+        action: () => {
+          const c = this.state.courses[0];
+          if (c) {
+            const s = this._courseSubjects(c.id)[0];
+            this.state.activeCourse  = c.id;
+            this.state.activeSubject = s || '__obs__';
+            this.state.view = 'grades';
+            this.render();
+          }
+        },
+      },
+      {
+        target: '.topbar-actions', position: 'bottom',
+        title: '👥 Importar alumnos',
+        desc: 'Importa tu lista desde Excel (copia y pega), agrega alumnos uno por uno, o copia la nómina de otro curso.',
+      },
+      {
+        target: '.sb-btn-clases', position: 'right',
+        title: '⚙️ Gestionar clases',
+        desc: 'Crea y configura tus propios cursos y asignaturas. Aquí comienza todo.',
+      },
+      {
+        target: null, position: 'center', isLast: true,
+        title: '¡Todo listo para empezar!',
+        desc: 'Comienza configurando tus cursos y luego importa tus alumnos. ¡Suerte!',
+      },
+    ];
+    this._renderTourStep();
+  }
 
-    this.showModal({
-      title: '¡Bienvenido/a al Libro Digital de Notas!',
-      body: `
-        <p style="color:var(--ink-3);font-size:0.92rem;margin:0 0 16px">
-          Antes de comenzar, cuéntanos un poco sobre ti.
-        </p>
-        <label class="modal-label">Tu nombre</label>
-        <input type="text" id="m-input" class="modal-input" placeholder="Ej: María González" autofocus>
-        <label class="modal-label" style="margin-top:16px">¿Cómo quieres empezar?</label>
-        <div class="ob-cards">
-          <label class="ob-card">
-            <input type="radio" name="ob-mode" value="fresh" checked>
-            <div class="ob-card-body">
-              <span class="ob-card-icon">🗂️</span>
-              <strong>Empezar desde cero</strong>
-              <span class="ob-card-desc">Sin alumnos de muestra. Tú defines tus cursos y los alumnos.</span>
-            </div>
-          </label>
-          <label class="ob-card">
-            <input type="radio" name="ob-mode" value="sample">
-            <div class="ob-card-body">
-              <span class="ob-card-icon">👀</span>
-              <strong>Explorar con datos de ejemplo</strong>
-              <span class="ob-card-desc">Ver cómo se ve la app con alumnos y notas cargadas.</span>
-            </div>
-          </label>
-        </div>`,
-      confirm: 'Comenzar →',
-      onConfirm: () => {
-        const name = document.getElementById('m-input')?.value.trim();
-        if (name) this.state.teacherName = name;
-        const mode = document.querySelector('input[name="ob-mode"]:checked')?.value || 'fresh';
-        if (mode === 'fresh') {
-          this.state.courses.forEach(c => {
-            this.state.students[c.id] = [];
-            const subjIds = this._courseSubjects(c.id);
-            subjIds.forEach(sId => {
-              this.state.grades[c.id][sId] = {};
-            });
-          });
-        }
-        this.state.onboardingDone = true;
-        this.state.view = 'clases';
-        this.save(); this.hideModal(); this.render();
-        if (mode === 'fresh') {
-          setTimeout(() => this.toast('¡Listo! Configura tus cursos y luego importa tus alumnos.'), 300);
-        }
+  _renderTourStep() {
+    document.getElementById('tour-overlay')?.remove();
+    document.getElementById('tour-spotlight')?.remove();
+    document.getElementById('tour-tooltip')?.remove();
+
+    const step  = this._tourSteps[this._tourStep];
+    const total = this._tourSteps.length;
+    const isLast  = this._tourStep === total - 1;
+    const isFirst = this._tourStep === 0;
+
+    // Overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'tour-overlay';
+    document.body.appendChild(overlay);
+
+    // Spotlight + bounding rect
+    let targetRect = null;
+    if (step.target) {
+      const el = document.querySelector(step.target);
+      if (el) {
+        targetRect = el.getBoundingClientRect();
+        const spot = document.createElement('div');
+        spot.id = 'tour-spotlight';
+        spot.style.cssText = `top:${targetRect.top - 8}px;left:${targetRect.left - 8}px;` +
+          `width:${targetRect.width + 16}px;height:${targetRect.height + 16}px`;
+        document.body.appendChild(spot);
       }
+    }
+
+    // Progress dots
+    const dots = Array.from({length: total}, (_, i) =>
+      `<span class="tour-dot${i === this._tourStep ? ' tour-dot-on' : ''}"></span>`
+    ).join('');
+
+    // Body HTML
+    let bodyHtml;
+    if (step.isWelcome) {
+      const savedName = (this.state.teacherName === 'Profesor/a de Historia') ? '' : (this.state.teacherName || '');
+      bodyHtml = `
+        <p class="tour-desc">${step.desc}</p>
+        <label class="tour-label">¿Cómo te llamas?</label>
+        <input type="text" id="tour-name" class="tour-input" placeholder="Ej: María González" value="${this._esc(savedName)}">
+        <div class="tour-modes">
+          <label class="tour-mode">
+            <input type="radio" name="tour-mode" value="fresh" checked>
+            <div class="tour-mode-body">
+              <strong>🗂️ Empezar desde cero</strong>
+              <span>Sin datos de muestra</span>
+            </div>
+          </label>
+          <label class="tour-mode">
+            <input type="radio" name="tour-mode" value="sample">
+            <div class="tour-mode-body">
+              <strong>👀 Explorar con ejemplos</strong>
+              <span>Ver la app con datos</span>
+            </div>
+          </label>
+        </div>`;
+    } else {
+      bodyHtml = `<p class="tour-desc">${step.desc}</p>`;
+    }
+
+    // Tooltip element
+    const tip = document.createElement('div');
+    tip.id = 'tour-tooltip';
+    if (step.position === 'center') tip.classList.add('tour-centered');
+    tip.innerHTML = `
+      <div class="tour-head">
+        <div class="tour-dots">${dots}</div>
+        <button id="tour-skip" class="tour-skip">✕ Saltar</button>
+      </div>
+      <h3 class="tour-title">${step.title}</h3>
+      ${bodyHtml}
+      <div class="tour-nav">
+        ${!isFirst ? '<button id="tour-prev" class="tour-btn-sec">← Atrás</button>' : '<span></span>'}
+        <button id="tour-next" class="tour-btn-pri">${isLast ? '¡Comenzar! →' : 'Siguiente →'}</button>
+      </div>`;
+    document.body.appendChild(tip);
+
+    // Position tooltip for non-center steps
+    if (step.position !== 'center' && targetRect) {
+      const pad = 18;
+      const tw  = tip.offsetWidth  || 310;
+      const th  = tip.offsetHeight || 180;
+      const vw  = window.innerWidth;
+      const vh  = window.innerHeight;
+      let top, left;
+
+      if (step.position === 'right') {
+        left = targetRect.right + pad;
+        top  = targetRect.top + targetRect.height / 2 - th / 2;
+      } else if (step.position === 'bottom') {
+        left = targetRect.left + targetRect.width / 2 - tw / 2;
+        top  = targetRect.bottom + pad;
+      } else if (step.position === 'left') {
+        left = targetRect.left - tw - pad;
+        top  = targetRect.top + targetRect.height / 2 - th / 2;
+      }
+
+      top  = Math.max(12, Math.min(top,  vh - th - 12));
+      left = Math.max(12, Math.min(left, vw - tw - 12));
+      tip.style.cssText += `top:${top}px;left:${left}px;`;
+    }
+
+    // Focus name input on welcome step
+    if (step.isWelcome) setTimeout(() => document.getElementById('tour-name')?.focus(), 60);
+
+    // Events
+    document.getElementById('tour-next')?.addEventListener('click', () => {
+      if (step.isWelcome) {
+        const name = document.getElementById('tour-name')?.value.trim();
+        if (name) { this.state.teacherName = name; this.save(); }
+        this._tourMode = document.querySelector('input[name="tour-mode"]:checked')?.value || 'fresh';
+      }
+      if (isLast) { this._endTour(); return; }
+      this._tourStep++;
+      const next = this._tourSteps[this._tourStep];
+      if (next.action) next.action();
+      this._renderTourStep();
     });
+
+    document.getElementById('tour-prev')?.addEventListener('click', () => {
+      this._tourStep--;
+      this._renderTourStep();
+    });
+
+    document.getElementById('tour-skip')?.addEventListener('click', () => this._endTour());
+  }
+
+  _endTour() {
+    document.getElementById('tour-overlay')?.remove();
+    document.getElementById('tour-spotlight')?.remove();
+    document.getElementById('tour-tooltip')?.remove();
+
+    if (this._tourMode === 'fresh') {
+      this.state.courses.forEach(c => {
+        this.state.students[c.id] = [];
+        this._courseSubjects(c.id).forEach(sId => { this.state.grades[c.id][sId] = {}; });
+      });
+    }
+
+    this.state.onboardingDone = true;
+    this.state.view = 'clases';
+    this.save();
+    this.render();
+    setTimeout(() => this.toast('¡Bienvenido/a! Configura tus cursos y luego importa tus alumnos.'), 300);
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────────
@@ -3222,7 +3376,7 @@ class GradeBook {
     this.load();
     this._bindAll();
     this.render();
-    this._showOnboarding();
+    this._startTour();
     if (this.state.onboardingDone) this._showRemindersPopup();
   }
 }
