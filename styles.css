@@ -2643,6 +2643,37 @@ tfoot tr {
 }
 .ov-att-warn { background: #F8D7DA; color: #721C24; border-color: #F5C6CB; }
 
+/* ── Onboarding ──────────────────────────────────────────────────────────── */
+.ob-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+.ob-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ob-card:has(input:checked) {
+  border-color: var(--navy);
+  background: rgba(30,58,95,0.05);
+}
+.ob-card input[type="radio"] { display: none; }
+.ob-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ob-card-icon { font-size: 1.4rem; line-height: 1; }
+.ob-card-body strong { font-size: 0.9rem; color: var(--ink); }
+.ob-card-desc { font-size: 0.8rem; color: var(--ink-3); }
+
 /* ── Recordatorios ───────────────────────────────────────────────────────── */
 .sb-btn-recs-pending { color: #b45309; }
 .sb-recs-badge {

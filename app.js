@@ -98,6 +98,7 @@ function makeDefaultState() {
     view:          'grades',
     teacherName:   'Profesor/a de Historia',
     year:          new Date().getFullYear(),
+    onboardingDone: false,
   };
 }
 
@@ -215,6 +216,7 @@ class GradeBook {
     if (s.schoolName  === undefined) s.schoolName  = null;
     if (s.schoolPlace === undefined) s.schoolPlace = null;
     if (s.schoolLogo  === undefined) s.schoolLogo  = null;
+    if (s.onboardingDone === undefined) s.onboardingDone = true;
 
     if (!s.activeCourse || !s.courses.find(c => c.id === s.activeCourse))
       s.activeCourse = s.courses[0]?.id || null;
@@ -3158,13 +3160,70 @@ class GradeBook {
     });
   }
 
+  // ── Onboarding ───────────────────────────────────────────────────────────────
+
+  _showOnboarding() {
+    if (this.state.onboardingDone) return;
+
+    this.showModal({
+      title: '¡Bienvenido/a al Libro Digital de Notas!',
+      body: `
+        <p style="color:var(--ink-3);font-size:0.92rem;margin:0 0 16px">
+          Antes de comenzar, cuéntanos un poco sobre ti.
+        </p>
+        <label class="modal-label">Tu nombre</label>
+        <input type="text" id="m-input" class="modal-input" placeholder="Ej: María González" autofocus>
+        <label class="modal-label" style="margin-top:16px">¿Cómo quieres empezar?</label>
+        <div class="ob-cards">
+          <label class="ob-card">
+            <input type="radio" name="ob-mode" value="fresh" checked>
+            <div class="ob-card-body">
+              <span class="ob-card-icon">🗂️</span>
+              <strong>Empezar desde cero</strong>
+              <span class="ob-card-desc">Sin alumnos de muestra. Tú defines tus cursos y los alumnos.</span>
+            </div>
+          </label>
+          <label class="ob-card">
+            <input type="radio" name="ob-mode" value="sample">
+            <div class="ob-card-body">
+              <span class="ob-card-icon">👀</span>
+              <strong>Explorar con datos de ejemplo</strong>
+              <span class="ob-card-desc">Ver cómo se ve la app con alumnos y notas cargadas.</span>
+            </div>
+          </label>
+        </div>`,
+      confirm: 'Comenzar →',
+      onConfirm: () => {
+        const name = document.getElementById('m-input')?.value.trim();
+        if (name) this.state.teacherName = name;
+        const mode = document.querySelector('input[name="ob-mode"]:checked')?.value || 'fresh';
+        if (mode === 'fresh') {
+          this.state.courses.forEach(c => {
+            this.state.students[c.id] = [];
+            const subjIds = this._courseSubjects(c.id);
+            subjIds.forEach(sId => {
+              this.state.grades[c.id][sId] = {};
+            });
+          });
+        }
+        this.state.onboardingDone = true;
+        this.state.view = 'clases';
+        this.save(); this.hideModal(); this.render();
+        if (mode === 'fresh') {
+          setTimeout(() => this.toast('¡Listo! Configura tus cursos y luego importa tus alumnos.'), 300);
+        }
+      }
+    });
+  }
+
   // ── Init ─────────────────────────────────────────────────────────────────────
 
   init() {
     this.load();
     this._bindAll();
     this.render();
-    this._showRemindersPopup();
+    this._showOnboarding();
+    if (this.state.onboardingDone) this._showRemindersPopup();
   }
 }
 
