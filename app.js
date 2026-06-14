@@ -209,12 +209,14 @@ class GradeBook {
 
     if (!s.taller)       s.taller       = {};
     if (!s.observations) s.observations = {};
+    if (!s.attendance)   s.attendance   = {};
+    if (!s.attendanceDate) s.attendanceDate = new Date().toISOString().slice(0, 10);
 
     if (!s.activeCourse || !s.courses.find(c => c.id === s.activeCourse))
       s.activeCourse = s.courses[0]?.id || null;
 
     const validSubjs   = this._courseSubjects(s.activeCourse);
-    const specialValid = ['__obs__', ...(this._hasTaller(s.activeCourse) ? ['__taller__'] : [])];
+    const specialValid = ['__obs__', '__asistencia__', ...(this._hasTaller(s.activeCourse) ? ['__taller__'] : [])];
     const isValidSubj  = validSubjs.includes(s.activeSubject) || specialValid.includes(s.activeSubject);
     if (!s.activeSubject || !isValidSubj)
       s.activeSubject = validSubjs[0];
@@ -346,6 +348,11 @@ class GradeBook {
               <span class="taller-sb-badge">${tallerCount > 0 ? tallerCount + (tallerCount === 1 ? ' clase' : ' clases') : 'Bitácora'}</span>
             </li>` : ''}
           ${hasStudents ? `
+            <li class="subject-item att-sb-item${activeSubject === '__asistencia__' ? ' active' : ''}"
+                data-action="set-subject" data-subject="__asistencia__">
+              <span class="subject-dot att-dot"></span>
+              <span>Asistencia</span>
+            </li>
             <li class="subject-item obs-sb-item${activeSubject === '__obs__' ? ' active' : ''}"
                 data-action="set-subject" data-subject="__obs__">
               <span class="subject-dot obs-dot"></span>
@@ -427,8 +434,9 @@ class GradeBook {
     const { activeCourse, activeSubject, courses, subjects } = this.state;
     if (!activeCourse || !activeSubject) return this.renderOverview();
 
-    if (activeSubject === '__taller__') return this.renderTaller();
-    if (activeSubject === '__obs__')    return this.renderObservaciones();
+    if (activeSubject === '__taller__')     return this.renderTaller();
+    if (activeSubject === '__obs__')        return this.renderObservaciones();
+    if (activeSubject === '__asistencia__') return this.renderAsistencia();
 
     const course  = courses.find(c => c.id === activeCourse);
     const subject = subjects.find(s => s.id === activeSubject);
@@ -447,6 +455,9 @@ class GradeBook {
           ${isConc ? '<span class="bc-conc-tag">Conceptual</span>' : ''}
         </div>
         <div class="topbar-actions">
+          <button class="btn-add btn-add-secondary" data-action="print-report-course">
+            ${this._icon('print')} Imprimir
+          </button>
           <button class="btn-add btn-add-secondary" data-action="import-students">
             ${this._icon('import')} Importar
           </button>
@@ -673,8 +684,47 @@ class GradeBook {
   }
 
   renderOverview() {
-    const { courses, subjects } = this.state;
+    const { courses, subjects, teacherName, year } = this.state;
 
+    // ── KPIs globales ────────────────────────────────────────────────────────
+    const totalStudents = courses.reduce((n, c) => n + (this.state.students[c.id] || []).length, 0);
+    const deudData      = this._getDeudores();
+    const totalDeudores = deudData.reduce((n, c) => n + c.deudores.length, 0);
+
+    let gAttTotal = 0, gAttPresent = 0;
+    courses.forEach(c => {
+      (this.state.students[c.id] || []).forEach(st => {
+        Object.values(this.state.attendance?.[c.id] || {}).forEach(day => {
+          const s = day[st.id];
+          if (s) { gAttTotal++; if (s !== 'A') gAttPresent++; }
+        });
+      });
+    });
+    const gAttPct = gAttTotal > 0 ? Math.round(gAttPresent / gAttTotal * 100) : null;
+
+    const kpiBar = `
+      <div class="dash-kpi-bar">
+        <div class="dash-kpi">
+          <span class="dash-kpi-val">${totalStudents}</span>
+          <span class="dash-kpi-label">alumnos</span>
+        </div>
+        <div class="dash-kpi">
+          <span class="dash-kpi-val">${courses.length}</span>
+          <span class="dash-kpi-label">cursos</span>
+        </div>
+        ${gAttPct !== null
+          ? `<div class="dash-kpi${gAttPct < 85 ? ' dash-kpi-warn' : ''}">
+               <span class="dash-kpi-val">${gAttPct}%</span>
+               <span class="dash-kpi-label">asistencia</span>
+             </div>`
+          : ''}
+        <div class="dash-kpi${totalDeudores > 0 ? ' dash-kpi-warn' : ' dash-kpi-ok'}">
+          <span class="dash-kpi-val">${totalDeudores > 0 ? totalDeudores : '✓'}</span>
+          <span class="dash-kpi-label">${totalDeudores > 0 ? 'con deudas' : 'al día'}</span>
+        </div>
+      </div>`;
+
+    // ── Tarjetas por curso ───────────────────────────────────────────────────
     const cards = courses.map(c => {
       const students  = this.state.students[c.id] || [];
       const subjIds   = this._courseSubjects(c.id);
@@ -687,7 +737,7 @@ class GradeBook {
       if (isConc) {
         const counts = { I:0, S:0, B:0, MB:0 };
         finals.forEach(v => { if (counts[v] !== undefined) counts[v]++; });
-        passed = (counts.S + counts.B + counts.MB);
+        passed = counts.S + counts.B + counts.MB;
         pct    = finals.length ? Math.round(passed / finals.length * 100) : 0;
         const topConcept = this.conceptAvg(finals);
         avgDisplay = `<div class="ov-avg ${this.gradeClass(topConcept)}" style="font-size:1.5rem">${topConcept || '—'}</div>`;
@@ -698,20 +748,43 @@ class GradeBook {
         avgDisplay = `<div class="ov-avg ${this.gradeClass(classAvg)}">${this.fmtAvg(classAvg)}</div>`;
       }
 
+      // Asistencia del curso
+      let cAttTotal = 0, cAttPresent = 0;
+      students.forEach(st => {
+        Object.values(this.state.attendance?.[c.id] || {}).forEach(day => {
+          const s = day[st.id];
+          if (s) { cAttTotal++; if (s !== 'A') cAttPresent++; }
+        });
+      });
+      const cAttPct  = cAttTotal > 0 ? Math.round(cAttPresent / cAttTotal * 100) : null;
+      const attBadge = cAttPct !== null
+        ? `<span class="ov-att-badge${cAttPct < 85 ? ' ov-att-warn' : ''}">${cAttPct}% asist.</span>`
+        : '';
+
       return `
         <div class="overview-card" data-action="set-course" data-course="${c.id}">
           <div class="ov-course">${this._esc(c.name)}</div>
           <div class="ov-count">${students.length} alumno${students.length !== 1 ? 's' : ''} · ${subjNames}</div>
           ${avgDisplay}
           <div class="ov-bar"><div class="ov-bar-fill" style="width:${pct}%"></div></div>
-          <div class="ov-stats">${passed} aprobados · ${pct}%</div>
+          <div class="ov-stats">${passed} aprobados · ${pct}% ${attBadge}</div>
         </div>`;
     }).join('');
 
     return `
       <div class="topbar">
-        <div class="breadcrumb"><span class="bc-overview">Vista General — Todos los cursos</span></div>
+        <div class="breadcrumb"><span class="bc-overview">Vista General — ${this._esc(year)}</span></div>
+        <div class="topbar-actions">
+          <button class="btn-add btn-add-secondary" data-action="print-report-overview">
+            ${this._icon('print')} Imprimir informe
+          </button>
+        </div>
       </div>
+      <div class="print-header" style="display:none">
+        <div class="ph-teacher">${this._esc(teacherName)}</div>
+        <div class="ph-title">Informe General de Notas — ${this._esc(String(year))}</div>
+      </div>
+      ${kpiBar}
       <div class="overview-grid">${cards}</div>`;
   }
 
@@ -974,6 +1047,19 @@ class GradeBook {
       this._showBackupHelp();
     } else if (a === 'dismiss-backup-banner') {
       document.getElementById('backup-banner')?.remove();
+
+    } else if (a === 'print-report-overview' || a === 'print-report-course') {
+      window.print();
+
+    } else if (a === 'toggle-attendance') {
+      this._toggleAttendance(el.dataset.student, el.dataset.date);
+    } else if (a === 'mark-all-present') {
+      this._markAllPresent(el.dataset.date);
+    } else if (a === 'att-nav-day') {
+      this.state.attendanceDate = el.dataset.date;
+      this.save(); this.render();
+    } else if (a === 'export-attendance') {
+      this._exportAttendanceCSV();
 
     } else if (a === 'gdrive-connect') {
       this._gdriveConnect();
@@ -1574,6 +1660,8 @@ class GradeBook {
       'clases':     `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="2" width="11" height="3" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="7" width="11" height="3" rx="1" stroke="currentColor" stroke-width="1.3"/><line x1="3" y1="3.5" x2="5" y2="3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="3" y1="8.5" x2="5" y2="8.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
       'import':     `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v7M4.5 6L7 8.5 9.5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 10h3.5M9.5 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="4" y="9" width="6" height="3" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>`,
       'drive':      `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M4.5 9.5l-3-5.5h7l3 5.5H4.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M1.5 4L5 9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M11.5 4L8 9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+      'attendance': `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="2" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 1v2M9 1v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M4 7l1.5 1.5L9 5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+      'print':      `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="3" y="1" width="7" height="4" rx="0.8" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="5" width="9" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="4" y="8" width="5" height="3" rx="0.5" fill="currentColor" opacity=".4"/><circle cx="10" cy="7" r="0.7" fill="currentColor"/></svg>`,
     };
     return icons[name] || '';
   }
@@ -2024,7 +2112,7 @@ class GradeBook {
 
       return `
         <div class="mc-course-row">
-          <div class="mc-course-left">
+          <div class="mc-course-left mc-course-nav" data-action="set-course" data-course="${c.id}" title="Ir a ${this._esc(c.name)}">
             <span class="mc-course-num">${idx + 1}</span>
             <div class="mc-course-info">
               <span class="mc-course-name">${this._esc(c.name)}</span>
@@ -2159,6 +2247,10 @@ class GradeBook {
           });
         });
         this.state.courseSubjects[cId] = checked.length ? checked : [current[0] || 's1'];
+        this.state.activeCourse  = cId;
+        const validSubjs = this._courseSubjects(cId);
+        this.state.activeSubject = validSubjs[0] || '__obs__';
+        this.state.view = 'grades';
         this.save(); this.hideModal(); this.render();
         this.toast(`Clase "${name}" actualizada`);
       }
@@ -2427,6 +2519,165 @@ class GradeBook {
       if (days === null) { statusEl.className = 'sb-backup-status sb-backup-never'; statusEl.textContent = 'Sin respaldo — datos en riesgo'; }
       else if (days >= BACKUP_WARNING_DAYS) { statusEl.className = 'sb-backup-status sb-backup-warn'; statusEl.textContent = `Respaldo hace ${days} día${days !== 1 ? 's' : ''}`; }
     }
+  }
+
+  // ── Asistencia ───────────────────────────────────────────────────────────────
+
+  _addDays(dateStr, n) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + n);
+    return dt.toISOString().slice(0, 10);
+  }
+
+  _formatDateLabel(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('es-CL', {
+      weekday: 'long', day: 'numeric', month: 'long'
+    });
+  }
+
+  _getAttStats(cId, stId) {
+    const att = this.state.attendance?.[cId] || {};
+    let total = 0, present = 0;
+    Object.values(att).forEach(day => {
+      const s = day[stId];
+      if (s) { total++; if (s !== 'A') present++; }
+    });
+    return { total, pct: total > 0 ? Math.round((present / total) * 100) : null };
+  }
+
+  renderAsistencia() {
+    const { activeCourse: cId, attendanceDate } = this.state;
+    const course   = this.state.courses.find(c => c.id === cId);
+    const students = this.state.students[cId] || [];
+    const today    = new Date().toISOString().slice(0, 10);
+    const date     = attendanceDate || today;
+    const att      = this.state.attendance?.[cId]?.[date] || {};
+
+    const counts = { P: 0, A: 0, AT: 0, J: 0, sin: 0 };
+    students.forEach(st => {
+      const s = att[st.id];
+      if (s === 'P') counts.P++;
+      else if (s === 'A') counts.A++;
+      else if (s === 'AT') counts.AT++;
+      else if (s === 'J') counts.J++;
+      else counts.sin++;
+    });
+
+    const prev     = this._addDays(date, -1);
+    const next     = this._addDays(date, 1);
+    const isToday  = date === today;
+    const isFuture = date > today;
+
+    const ATT_LABEL = { P: 'Presente', A: 'Ausente', AT: 'Atraso', J: 'Justificado' };
+    const recorded  = students.length - counts.sin;
+
+    const rows = students.length ? students.map(st => {
+      const s     = att[st.id] || '';
+      const stats = this._getAttStats(cId, st.id);
+      return `
+        <div class="att-row">
+          <span class="att-name">${this._esc(st.name)}</span>
+          <button class="att-btn att-s-${s || 'none'}"
+                  data-action="toggle-attendance"
+                  data-student="${st.id}" data-date="${date}"
+                  title="${ATT_LABEL[s] || 'Sin registrar — clic para marcar'}">
+            ${s || '—'}
+          </button>
+          <span class="att-pct">${stats.pct !== null ? stats.pct + '%' : ''}</span>
+        </div>`;
+    }).join('') : `<div class="att-empty">Sin alumnos en este curso.</div>`;
+
+    const summaryBar = recorded === 0
+      ? `<div class="att-summary-bar"><span class="att-sum-empty">Sin registros para este día · clic en cada alumno para marcar</span></div>`
+      : `<div class="att-summary-bar">
+           ${counts.P  ? `<span class="att-sum att-sum-p">${counts.P}&nbsp;P</span>` : ''}
+           ${counts.A  ? `<span class="att-sum att-sum-a">${counts.A}&nbsp;A</span>` : ''}
+           ${counts.AT ? `<span class="att-sum att-sum-at">${counts.AT}&nbsp;AT</span>` : ''}
+           ${counts.J  ? `<span class="att-sum att-sum-j">${counts.J}&nbsp;J</span>` : ''}
+           ${counts.sin ? `<span class="att-sum att-sum-sin">${counts.sin} sin registrar</span>` : ''}
+         </div>`;
+
+    return `
+      <div class="topbar">
+        <div class="breadcrumb">
+          <span class="bc-course">${this._esc(course.name)}</span>
+          <span class="bc-sep">›</span>
+          <span class="bc-subject">${this._icon('attendance')} Asistencia</span>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn-add btn-add-secondary" data-action="mark-all-present" data-date="${date}">✓ Todos Presente</button>
+          ${recorded > 0 ? `<button class="btn-add btn-add-secondary" data-action="export-attendance">${this._icon('download')} Exportar</button>` : ''}
+        </div>
+      </div>
+
+      <div class="att-wrap">
+        <div class="att-date-nav">
+          <button class="att-nav-btn" data-action="att-nav-day" data-date="${prev}">‹</button>
+          <div class="att-date-info">
+            <span class="att-date-label">${this._formatDateLabel(date)}</span>
+            ${isToday ? '<span class="att-today-badge">Hoy</span>' : ''}
+          </div>
+          <button class="att-nav-btn" data-action="att-nav-day" data-date="${next}"${isFuture ? ' disabled' : ''}>›</button>
+        </div>
+        ${summaryBar}
+        <div class="att-students">${rows}</div>
+        <div class="att-legend">
+          <span class="att-leg att-s-P">P = Presente</span>
+          <span class="att-leg att-s-A">A = Ausente</span>
+          <span class="att-leg att-s-AT">AT = Atraso</span>
+          <span class="att-leg att-s-J">J = Justificado</span>
+          <span class="att-leg-hint">% = asistencia anual (sin A)</span>
+        </div>
+      </div>`;
+  }
+
+  _toggleAttendance(stId, date) {
+    const cId   = this.state.activeCourse;
+    const cycle = { '': 'P', P: 'A', A: 'AT', AT: 'J', J: '' };
+    if (!this.state.attendance[cId])       this.state.attendance[cId]       = {};
+    if (!this.state.attendance[cId][date]) this.state.attendance[cId][date] = {};
+    const current = this.state.attendance[cId][date][stId] || '';
+    const next    = cycle[current];
+    if (next === '') {
+      delete this.state.attendance[cId][date][stId];
+      if (!Object.keys(this.state.attendance[cId][date]).length)
+        delete this.state.attendance[cId][date];
+    } else {
+      this.state.attendance[cId][date][stId] = next;
+    }
+    this.save();
+    // Refresh solo la fila afectada para no re-renderizar todo
+    this.render();
+  }
+
+  _markAllPresent(date) {
+    const cId      = this.state.activeCourse;
+    const students = this.state.students[cId] || [];
+    if (!students.length) return;
+    if (!this.state.attendance[cId])       this.state.attendance[cId]       = {};
+    if (!this.state.attendance[cId][date]) this.state.attendance[cId][date] = {};
+    students.forEach(st => { this.state.attendance[cId][date][st.id] = 'P'; });
+    this.save(); this.render();
+    this.toast(`${students.length} alumnos marcados como Presentes`);
+  }
+
+  _exportAttendanceCSV() {
+    const cId     = this.state.activeCourse;
+    const course  = this.state.courses.find(c => c.id === cId);
+    const students = this.state.students[cId] || [];
+    const att      = this.state.attendance?.[cId] || {};
+    const dates    = Object.keys(att).sort();
+    if (!dates.length) { this.toast('Sin registros de asistencia para exportar'); return; }
+    const esc = v => v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v;
+    const header = ['Alumno', ...dates].join(',');
+    const rows   = students.map(st => [esc(st.name), ...dates.map(d => att[d]?.[st.id] || '')].join(','));
+    const csv    = [header, ...rows].join('\n');
+    const blob   = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url    = URL.createObjectURL(blob);
+    const a      = document.createElement('a');
+    a.href = url; a.download = `asistencia_${(course?.name || cId).replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
   }
 
   // ── Google Drive ─────────────────────────────────────────────────────────────

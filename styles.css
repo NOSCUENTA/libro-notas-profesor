@@ -1965,6 +1965,15 @@ tfoot tr {
   gap: 12px;
   min-width: 0;
 }
+.mc-course-nav {
+  cursor: pointer;
+  flex: 1;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  transition: background 0.15s;
+}
+.mc-course-nav:hover { background: rgba(139,90,43,0.08); }
 
 .mc-course-num {
   width: 22px;
@@ -2200,6 +2209,162 @@ tfoot tr {
   margin-top: 1px;
 }
 
+/* ── Asistencia view ──────────────────────────────────────────────────────── */
+.att-dot { background: #5B9BD5; }
+
+.att-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 20px 16px;
+}
+
+/* Date navigation */
+.att-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0 10px;
+}
+.att-nav-btn {
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--t);
+  flex-shrink: 0;
+}
+.att-nav-btn:hover:not(:disabled) { background: var(--surface2); color: var(--ink); }
+.att-nav-btn:disabled { opacity: 0.35; cursor: default; }
+
+.att-date-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.att-date-label {
+  font-family: var(--ff-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.att-today-badge {
+  font-size: 0.72rem;
+  font-family: var(--ff-mono);
+  background: var(--gold-light);
+  color: var(--gold-ink);
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid var(--gold-border);
+}
+
+/* Summary bar */
+.att-summary-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.att-sum {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 12px;
+  font-size: 0.8rem; font-family: var(--ff-mono); font-weight: 600;
+}
+.att-sum-p   { background: #D4EDDA; color: #155724; }
+.att-sum-a   { background: #F8D7DA; color: #721C24; }
+.att-sum-at  { background: #FFF3CD; color: #856404; }
+.att-sum-j   { background: #D1ECF1; color: #0C5460; }
+.att-sum-sin { background: var(--surface2); color: var(--ink-4); font-weight: 400; }
+.att-sum-empty { font-size: 0.82rem; color: var(--ink-4); font-style: italic; align-self: center; }
+
+/* Student rows */
+.att-students {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.att-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.att-row:last-child { border-bottom: none; }
+
+.att-name {
+  flex: 1;
+  font-size: 0.9rem;
+  font-family: var(--ff-body);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Status buttons */
+.att-btn {
+  min-width: 38px; height: 28px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-family: var(--ff-mono);
+  font-weight: 700;
+  border: 1px solid var(--border-2);
+  cursor: pointer;
+  transition: var(--t);
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+.att-s-none { background: var(--surface); color: var(--ink-4); }
+.att-s-none:hover { background: var(--surface2); color: var(--ink-2); }
+.att-s-P  { background: #D4EDDA; color: #155724; border-color: #C3E6CB; }
+.att-s-P:hover  { background: #C3E6CB; }
+.att-s-A  { background: #F8D7DA; color: #721C24; border-color: #F5C6CB; }
+.att-s-A:hover  { background: #F5C6CB; }
+.att-s-AT { background: #FFF3CD; color: #856404; border-color: #FFEEBA; }
+.att-s-AT:hover { background: #FFEEBA; }
+.att-s-J  { background: #D1ECF1; color: #0C5460; border-color: #BEE5EB; }
+.att-s-J:hover  { background: #BEE5EB; }
+
+.att-pct {
+  font-size: 0.72rem;
+  font-family: var(--ff-mono);
+  color: var(--ink-4);
+  min-width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Legend */
+.att-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+.att-leg {
+  font-size: 0.72rem;
+  font-family: var(--ff-mono);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.att-leg-hint { font-size: 0.72rem; color: var(--ink-4); font-family: var(--ff-mono); align-self: center; }
+.att-empty { color: var(--ink-4); font-style: italic; padding: 20px 0; }
+
 /* ── Google Drive sidebar section ─────────────────────────────────────────── */
 .sb-drive-section {
   margin-top: 6px;
@@ -2377,10 +2542,99 @@ tfoot tr {
 .import-preview-dupe::before { content: '≈'; color: var(--ink-4); font-size: 0.78rem; flex-shrink: 0; }
 .import-preview-list-dupe .import-preview-item { color: var(--ink-4); }
 
-/* ── Print ────────────────────────────────────────────────────────────────── */
+/* ── Dashboard KPI bar ────────────────────────────────────────────────────── */
+.dash-kpi-bar {
+  display: flex;
+  gap: 12px;
+  padding: 12px 20px 8px;
+  flex-wrap: wrap;
+}
+.dash-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 20px;
+  min-width: 80px;
+  gap: 2px;
+}
+.dash-kpi-val {
+  font-family: var(--ff-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.dash-kpi-label {
+  font-size: 0.72rem;
+  font-family: var(--ff-mono);
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.dash-kpi-warn .dash-kpi-val { color: var(--g-fail-fg); }
+.dash-kpi-warn { border-color: var(--g-fail-bdr); background: var(--g-fail-bg); }
+.dash-kpi-ok .dash-kpi-val   { color: #155724; }
+.dash-kpi-ok  { border-color: #C3E6CB; background: #D4EDDA; }
+
+/* Badge de asistencia en tarjetas overview */
+.ov-att-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-family: var(--ff-mono);
+  background: #D4EDDA;
+  color: #155724;
+  border: 1px solid #C3E6CB;
+}
+.ov-att-warn { background: #F8D7DA; color: #721C24; border-color: #F5C6CB; }
+
+/* ── Print / Reportes PDF ─────────────────────────────────────────────────── */
+.print-header { display: none; }
+
 @media print {
-  .sidebar, .topbar-actions, .del-student-btn, .edit-student-btn, .retire-student-btn, .student-btn-group, .eval-del, .th-add, .obs-search-bar,
-  .stats-panel, .modal-backdrop, .modal, .toast { display: none !important; }
-  .main { width: 100%; }
-  .table-wrap { overflow: visible; }
+  /* Ocultar UI innecesaria */
+  .sidebar, .topbar-actions, .del-student-btn, .edit-student-btn,
+  .retire-student-btn, .student-btn-group, .eval-del, .th-add,
+  .obs-search-bar, .stats-panel, .modal-backdrop, .modal, .toast,
+  .backup-banner, .dash-kpi-bar, .att-date-nav, .att-legend,
+  .att-summary-bar, .btn-add, .sb-footer { display: none !important; }
+
+  /* Layout impresión */
+  body { background: white !important; }
+  .app { display: block !important; }
+  .main { width: 100% !important; padding: 0 !important; }
+  .table-wrap { overflow: visible !important; }
+  .topbar { border-bottom: 2px solid #000 !important; padding-bottom: 8px !important; margin-bottom: 12px !important; }
+
+  /* Encabezado del informe */
+  .print-header {
+    display: block !important;
+    text-align: center;
+    padding: 0 0 12px;
+    border-bottom: 2px solid #000;
+    margin-bottom: 16px;
+  }
+  .ph-teacher { font-size: 0.85rem; color: #555; margin-bottom: 2px; }
+  .ph-title   { font-size: 1.2rem; font-weight: 700; }
+
+  /* Tablas de notas */
+  .grade-table { font-size: 0.78rem !important; border-collapse: collapse; width: 100%; }
+  .grade-table th, .grade-table td { border: 1px solid #ccc !important; padding: 3px 6px !important; }
+  .grade-table thead { background: #f0f0f0 !important; }
+
+  /* Cards de overview */
+  .overview-grid { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; }
+  .overview-card { border: 1px solid #ccc !important; break-inside: avoid; }
+
+  /* Asistencia */
+  .att-students { overflow: visible !important; }
+  .att-wrap     { overflow: visible !important; }
+  .att-btn      { border: 1px solid #999 !important; }
+
+  /* Fuentes */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
