@@ -212,6 +212,9 @@ class GradeBook {
     if (!s.attendance)   s.attendance   = {};
     if (!s.attendanceDate) s.attendanceDate = new Date().toISOString().slice(0, 10);
     if (!s.reminders)    s.reminders    = [];
+    if (s.schoolName  === undefined) s.schoolName  = null;
+    if (s.schoolPlace === undefined) s.schoolPlace = null;
+    if (s.schoolLogo  === undefined) s.schoolLogo  = null;
 
     if (!s.activeCourse || !s.courses.find(c => c.id === s.activeCourse))
       s.activeCourse = s.courses[0]?.id || null;
@@ -419,17 +422,7 @@ class GradeBook {
         ${GDRIVE_CLIENT_ID ? this._renderDriveSection() : ''}
       </div>
 
-      <div class="sb-school-brand">
-        <img src="./logo-colegio.png" alt="Escuela José Miguel Martínez Soto" class="sb-school-logo"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="sb-school-fallback" style="display:none">
-          <span class="sb-school-icon">🏫</span>
-        </div>
-        <div class="sb-school-info">
-          <span class="sb-school-name">Escuela J.M. Martínez Soto</span>
-          <span class="sb-school-place">Palguin Bajo</span>
-        </div>
-      </div>`;
+      ${this._renderSchoolBrand()}`;
   }
 
   renderMain() {
@@ -948,6 +941,9 @@ class GradeBook {
     } else if (a === 'show-clases') {
       this.state.view = 'clases';
       this.render();
+
+    } else if (a === 'edit-school') {
+      this._promptEditSchool();
 
     } else if (a === 'show-recordatorios') {
       this.state.view = 'recordatorios';
@@ -2972,6 +2968,83 @@ class GradeBook {
     } catch {
       this.toast('Error al conectar con Google Drive. Intenta reconectar.');
     }
+  }
+
+  // ── Colegio editable ─────────────────────────────────────────────────────────
+
+  _renderSchoolBrand() {
+    const { schoolName, schoolPlace, schoolLogo } = this.state;
+    const isNew = !schoolName && !schoolLogo;
+    const displayName  = schoolName  || 'Mi Colegio';
+    const displayPlace = schoolPlace || (isNew ? 'Toca para personalizar' : '');
+
+    const logoHtml = schoolLogo
+      ? `<img src="${schoolLogo}" alt="Logo colegio" class="sb-school-logo">`
+      : `<img src="./logo-colegio.png" alt="Logo colegio" class="sb-school-logo"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+         <div class="sb-school-fallback${isNew ? ' sb-school-fallback-new' : ''}" style="display:none">
+           <svg width="22" height="22" viewBox="0 0 22 22" fill="none" style="opacity:.7">
+             <path d="M11 2L3 7v1h16V7L11 2z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/>
+             <rect x="5" y="8" width="12" height="12" rx="1" stroke="white" stroke-width="1.4"/>
+             <rect x="8" y="13" width="3" height="7" fill="white" opacity=".5"/>
+             <rect x="11" y="13" width="3" height="7" fill="white" opacity=".5"/>
+           </svg>
+         </div>`;
+
+    return `
+      <div class="sb-school-brand sb-school-editable${isNew ? ' sb-school-new' : ''}" data-action="edit-school" title="Editar información del colegio">
+        <div class="sb-school-logo-wrap">
+          ${logoHtml}
+          <div class="sb-school-edit-overlay">✎</div>
+        </div>
+        <div class="sb-school-info">
+          <span class="sb-school-name${isNew ? ' sb-school-name-new' : ''}">${this._esc(displayName)}</span>
+          ${displayPlace ? `<span class="sb-school-place${isNew ? ' sb-school-place-new' : ''}">${this._esc(displayPlace)}</span>` : ''}
+        </div>
+      </div>`;
+  }
+
+  _promptEditSchool() {
+    const { schoolName, schoolPlace, schoolLogo } = this.state;
+    this.showModal({
+      title: 'Información del colegio',
+      body: `
+        <label class="modal-label">Nombre del colegio</label>
+        <input type="text" id="m-school-name" class="modal-input" value="${this._esc(schoolName || '')}" placeholder="Ej: Escuela José Martínez" autofocus>
+        <label class="modal-label" style="margin-top:12px">Localidad o ciudad</label>
+        <input type="text" id="m-school-place" class="modal-input" value="${this._esc(schoolPlace || '')}" placeholder="Ej: Santiago">
+        <label class="modal-label" style="margin-top:12px">Logo del colegio</label>
+        ${schoolLogo
+          ? `<div style="margin-bottom:8px"><img src="${schoolLogo}" style="height:52px;border-radius:8px;border:1px solid var(--border)"></div>
+             <label class="mc-modal-check" style="margin-bottom:8px"><input type="checkbox" id="m-logo-clear"> Eliminar logo actual</label>`
+          : `<div class="modal-hint" style="margin-bottom:6px">JPG o PNG, máximo 1 MB.</div>`}
+        <input type="file" id="m-school-logo" accept="image/*" class="modal-file">`,
+      confirm: 'Guardar',
+      onConfirm: () => {
+        const name   = document.getElementById('m-school-name')?.value.trim()  || null;
+        const place  = document.getElementById('m-school-place')?.value.trim() || null;
+        const clear  = document.getElementById('m-logo-clear')?.checked || false;
+        const file   = document.getElementById('m-school-logo')?.files?.[0];
+        this.state.schoolName  = name;
+        this.state.schoolPlace = place;
+        if (clear) this.state.schoolLogo = null;
+        if (file) {
+          if (file.size > 1024 * 1024) {
+            this.toast('Imagen demasiado grande — máximo 1 MB'); return;
+          }
+          const reader = new FileReader();
+          reader.onload = ev => {
+            this.state.schoolLogo = ev.target.result;
+            this.save(); this.hideModal(); this.render();
+            this.toast('Información del colegio guardada');
+          };
+          reader.readAsDataURL(file);
+        } else {
+          this.save(); this.hideModal(); this.render();
+          this.toast('Información del colegio guardada');
+        }
+      }
+    });
   }
 
   // ── Recordatorios ────────────────────────────────────────────────────────────

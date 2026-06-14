@@ -1425,6 +1425,38 @@ tfoot tr {
   text-transform: uppercase;
 }
 
+/* Editable */
+.sb-school-editable { cursor: pointer; border-radius: 8px; transition: background 0.15s; }
+.sb-school-editable:hover { background: rgba(255,255,255,0.06); }
+.sb-school-logo-wrap { position: relative; flex-shrink: 0; width: 44px; height: 44px; }
+.sb-school-edit-overlay {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; color: #fff;
+  opacity: 0; transition: opacity 0.15s;
+  pointer-events: none;
+}
+.sb-school-editable:hover .sb-school-edit-overlay { opacity: 1; }
+.sb-school-fallback-new {
+  border: 2px dashed rgba(255,255,255,0.35) !important;
+  background: rgba(255,255,255,0.04) !important;
+}
+.sb-school-new { animation: pulse-border 2.5s ease-in-out infinite; }
+@keyframes pulse-border {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(255,255,255,0.05); }
+}
+.sb-school-name-new  { color: rgba(255,255,255,0.45) !important; font-style: italic; }
+.sb-school-place-new { color: rgba(255,255,255,0.3) !important; font-style: italic; text-transform: none !important; }
+.modal-file {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--ink-3);
+}
+
 /* ── Sidebar: ítems especiales (Taller JEC, Observaciones) ───────────────── */
 .taller-dot  { background: #6fcf97; opacity: 0.8; }
 .obs-dot     { background: #f2994a; opacity: 0.8; }
