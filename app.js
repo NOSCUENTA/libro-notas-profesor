@@ -3180,7 +3180,7 @@ class GradeBook {
       {
         target: '.course-list', position: 'right',
         title: '📚 Tus cursos',
-        desc: 'Aquí aparecen todos tus cursos. Haz clic en uno para expandirlo y ver sus asignaturas.',
+        desc: 'Haz clic en un curso para expandirlo y ver sus asignaturas.',
       },
       {
         target: '.subject-list', position: 'right',
@@ -3298,12 +3298,14 @@ class GradeBook {
     tip.id = 'tour-tooltip';
     if (step.position === 'center') tip.classList.add('tour-centered');
     tip.innerHTML = `
-      <div class="tour-head">
-        <div class="tour-dots">${dots}</div>
-        <button id="tour-skip" class="tour-skip">✕ Saltar</button>
+      <div class="tour-body">
+        <div class="tour-head">
+          <div class="tour-dots">${dots}</div>
+          <button id="tour-skip" class="tour-skip">✕ Saltar</button>
+        </div>
+        <h3 class="tour-title">${step.title}</h3>
+        ${bodyHtml}
       </div>
-      <h3 class="tour-title">${step.title}</h3>
-      ${bodyHtml}
       <div class="tour-nav">
         ${!isFirst ? '<button id="tour-prev" class="tour-btn-sec">← Atrás</button>' : '<span></span>'}
         <button id="tour-next" class="tour-btn-pri">${isLast ? '¡Comenzar! →' : 'Siguiente →'}</button>
