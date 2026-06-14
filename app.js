@@ -2990,7 +2990,7 @@ class GradeBook {
           </button>
           <div class="rec-content">
             <span class="rec-text">${this._esc(r.text)}</span>
-            ${course ? `<span class="rec-course-tag">${this._esc(course.name)}</span>` : ''}
+            ${course ? `<span class="rec-course-tag" style="font-size:0.75rem;background:var(--navy,#1e3a5f);color:#fff;border-radius:99px;padding:2px 9px;margin-left:4px;opacity:0.8">${this._esc(course.name)}</span>` : ''}
           </div>
           <button class="rec-del" data-action="del-reminder" data-id="${r.id}" title="Eliminar">×</button>
         </div>`;
