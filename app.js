@@ -8,6 +8,20 @@ const STORE_KEY           = 'libro_calificaciones_v3';
 const BACKUP_KEY          = 'libro_notas_last_backup';
 const BACKUP_WARNING_DAYS = 7;
 
+// ── Códigos de activación ──────────────────────────────────────────────────────
+const ACTIVATION_CODES = new Set([
+  'LIBRO-2026-K4M9X', 'LIBRO-2026-B7R2N', 'LIBRO-2026-W3P5T',
+  'LIBRO-2026-H8C6F', 'LIBRO-2026-Q2S4D', 'LIBRO-2026-Y7Z3J',
+  'LIBRO-2026-L5A9V', 'LIBRO-2026-E6N2G', 'LIBRO-2026-T3X8K',
+  'LIBRO-2026-M4B7W', 'LIBRO-2026-R9F2C', 'LIBRO-2026-P3H6Y',
+  'LIBRO-2026-J8Q5S', 'LIBRO-2026-V2D9L', 'LIBRO-2026-Z7T4E',
+  'LIBRO-2026-G3W8N', 'LIBRO-2026-C6K2M', 'LIBRO-2026-X5A7R',
+  'LIBRO-2026-F9P3B', 'LIBRO-2026-N4Y8H', 'LIBRO-2026-S2Z6Q',
+  'LIBRO-2026-D7J5V', 'LIBRO-2026-A3C9T', 'LIBRO-2026-W8M2K',
+  'LIBRO-2026-R4F7N', 'LIBRO-2026-L6H3P', 'LIBRO-2026-E9Q5G',
+  'LIBRO-2026-T7S2Y', 'LIBRO-2026-B3Z8D', 'LIBRO-2026-K9X4W',
+]);
+
 // ── Google Drive (opcional) ────────────────────────────────────────────────────
 // Para activar: crea un proyecto en console.cloud.google.com,
 // habilita "Drive API" y copia tu OAuth 2.0 Client ID aquí.
@@ -99,6 +113,7 @@ function makeDefaultState() {
     teacherName:   'Profesor/a de Historia',
     year:          new Date().getFullYear(),
     onboardingDone: false,
+    activated:      false,
   };
 }
 
@@ -217,6 +232,7 @@ class GradeBook {
     if (s.schoolPlace === undefined) s.schoolPlace = null;
     if (s.schoolLogo  === undefined) s.schoolLogo  = null;
     if (s.onboardingDone === undefined) s.onboardingDone = true;
+    if (s.activated      === undefined) s.activated      = true;
 
     if (!s.activeCourse || !s.courses.find(c => c.id === s.activeCourse))
       s.activeCourse = s.courses[0]?.id || null;
@@ -898,7 +914,10 @@ class GradeBook {
     e.stopPropagation();
     const a = el.dataset.action;
 
-    if (a === 'toggle-sidebar') {
+    if (a === 'activate') {
+      this._validateActivation();
+
+    } else if (a === 'toggle-sidebar') {
       document.getElementById('app').classList.toggle('sb-open');
 
     } else if (a === 'close-sidebar') {
@@ -3401,9 +3420,63 @@ class GradeBook {
 
   // ── Init ─────────────────────────────────────────────────────────────────────
 
+  _showActivation() {
+    document.getElementById('app').innerHTML = `
+      <div class="act-screen">
+        <div class="act-card">
+          <div class="act-logo">📒</div>
+          <h1 class="act-title">Libro Digital de Notas</h1>
+          <p class="act-sub">Ingresa tu código de acceso para continuar</p>
+          <div class="act-form">
+            <input id="act-input" class="act-input" type="text"
+              placeholder="LIBRO-2026-XXXXX"
+              autocomplete="off" autocapitalize="characters" spellcheck="false"
+              maxlength="16">
+            <button class="act-btn" data-action="activate">Activar →</button>
+          </div>
+          <div id="act-error" class="act-error"></div>
+          <p class="act-contact">
+            ¿No tienes código?
+            <a href="https://wa.me/56982857408?text=Hola%2C%20quiero%20obtener%20el%20Libro%20Digital%20de%20Notas"
+               target="_blank" class="act-wa">Escríbenos por WhatsApp →</a>
+          </p>
+        </div>
+      </div>`;
+
+    const input = document.getElementById('act-input');
+    input.focus();
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.querySelector('[data-action="activate"]').click();
+    });
+    input.addEventListener('input', () => {
+      input.value = input.value.toUpperCase();
+      document.getElementById('act-error').textContent = '';
+    });
+  }
+
+  _validateActivation() {
+    const input = document.getElementById('act-input');
+    const code  = (input?.value || '').trim().toUpperCase();
+    if (!ACTIVATION_CODES.has(code)) {
+      const err = document.getElementById('act-error');
+      if (err) err.textContent = 'Código inválido. Verifica que esté escrito correctamente.';
+      input?.focus();
+      return;
+    }
+    this.state.activated     = true;
+    this.state.activationCode = code;
+    this.save();
+    this.render();
+    this._startTour();
+  }
+
   init() {
     this.load();
     this._bindAll();
+    if (!this.state.activated) {
+      this._showActivation();
+      return;
+    }
     this.render();
     this._startTour();
     if (this.state.onboardingDone) this._showRemindersPopup();

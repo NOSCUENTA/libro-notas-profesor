@@ -2911,6 +2911,71 @@ tfoot tr {
   white-space: nowrap;
 }
 
+/* ── Pantalla de activación ───────────────────────────────────────────────── */
+.act-screen {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  z-index: 999;
+}
+.act-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 48px 40px 36px;
+  width: 100%; max-width: 420px;
+  text-align: center;
+  box-shadow: var(--sh-lg);
+}
+.act-logo {
+  font-size: 2.2rem; margin-bottom: 14px; display: block;
+}
+.act-title {
+  font-family: var(--ff-display);
+  font-size: 1.8rem; font-weight: 700;
+  color: var(--sb); margin-bottom: 8px; line-height: 1.1;
+}
+.act-sub {
+  font-size: 0.92rem; color: var(--ink-3);
+  font-weight: 300; margin-bottom: 28px; line-height: 1.5;
+}
+.act-form {
+  display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;
+}
+.act-input {
+  width: 100%; padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  font-family: var(--ff-mono); font-size: 1rem;
+  text-align: center; letter-spacing: 0.08em;
+  color: var(--ink); background: var(--surface);
+  outline: none; transition: border-color var(--t);
+}
+.act-input:focus { border-color: var(--sb); }
+.act-btn {
+  width: 100%; padding: 12px;
+  background: var(--sb); color: #fff;
+  border: none; border-radius: 9px;
+  font-family: var(--ff-body); font-size: 0.97rem; font-weight: 600;
+  cursor: pointer; transition: background var(--t);
+}
+.act-btn:hover { background: var(--sb-active); }
+.act-error {
+  min-height: 20px; font-size: 0.82rem;
+  color: var(--g-fail-fg); margin-bottom: 8px;
+  font-style: italic;
+}
+.act-contact {
+  font-size: 0.82rem; color: var(--ink-4);
+  margin-top: 20px; line-height: 1.6;
+}
+.act-wa {
+  color: #25D366; font-weight: 600; text-decoration: none;
+  display: block; margin-top: 4px;
+}
+.act-wa:hover { text-decoration: underline; }
+
 /* ── Hamburger / Drawer ───────────────────────────────────────────────────── */
 .sb-toggle {
   display: none;
