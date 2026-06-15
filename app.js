@@ -313,6 +313,14 @@ class GradeBook {
 
   render() {
     document.getElementById('app').innerHTML =
+      `<button class="sb-toggle" data-action="toggle-sidebar" aria-label="Menú">
+         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+           <rect y="2"  width="18" height="2" rx="1" fill="currentColor"/>
+           <rect y="8"  width="18" height="2" rx="1" fill="currentColor"/>
+           <rect y="14" width="18" height="2" rx="1" fill="currentColor"/>
+         </svg>
+       </button>` +
+      `<div class="sb-backdrop" data-action="close-sidebar"></div>` +
       `<aside class="sidebar">${this.renderSidebar()}</aside>` +
       `<main  class="main">${this._renderBackupBanner()}${this.renderMain()}</main>`;
   }
@@ -890,17 +898,25 @@ class GradeBook {
     e.stopPropagation();
     const a = el.dataset.action;
 
-    if (a === 'set-course') {
+    if (a === 'toggle-sidebar') {
+      document.getElementById('app').classList.toggle('sb-open');
+
+    } else if (a === 'close-sidebar') {
+      document.getElementById('app').classList.remove('sb-open');
+
+    } else if (a === 'set-course') {
       const cId = el.dataset.course;
       this.state.activeCourse  = cId;
       const validSubjs = this._courseSubjects(cId);
       this.state.activeSubject = validSubjs[0];
       this.state.view = 'grades';
+      document.getElementById('app').classList.remove('sb-open');
       this.save(); this.render();
 
     } else if (a === 'set-subject') {
       this.state.activeSubject = el.dataset.subject;
       this.state.view = 'grades';
+      document.getElementById('app').classList.remove('sb-open');
       this.save(); this.render();
 
     } else if (a === 'edit-grade') {

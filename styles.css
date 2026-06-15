@@ -2911,6 +2911,171 @@ tfoot tr {
   white-space: nowrap;
 }
 
+/* ── Hamburger / Drawer ───────────────────────────────────────────────────── */
+.sb-toggle {
+  display: none;
+  position: fixed;
+  top: 10px; left: 10px;
+  z-index: 50;
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  background: var(--sb);
+  color: var(--sb-text);
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--sh-md);
+  border: none;
+  cursor: pointer;
+  transition: background var(--t);
+}
+.sb-toggle:hover { background: var(--sb-hover); }
+
+.sb-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 15;
+  backdrop-filter: blur(2px);
+}
+
+/* ── MOBILE ───────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Variables reducidas */
+  :root {
+    --cell-w:  46px;
+    --name-w:  140px;
+    --avg-w:   56px;
+    --num-w:   30px;
+  }
+
+  /* Hamburger visible */
+  .sb-toggle { display: flex; }
+
+  /* Sidebar: drawer overlay */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 20;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+    box-shadow: none;
+  }
+  #app.sb-open .sidebar {
+    transform: translateX(0);
+    box-shadow: 4px 0 32px rgba(0,0,0,0.35);
+  }
+  #app.sb-open .sb-backdrop { display: block; }
+
+  /* Main: ancho completo */
+  .main { width: 100%; min-width: 0; }
+
+  /* Topbar: espacio para hamburger */
+  .topbar {
+    padding: 10px 12px 10px 58px;
+    gap: 8px;
+    min-height: 52px;
+  }
+  .breadcrumb { font-size: 1rem; gap: 5px; }
+  .bc-sep { margin: 0 2px; }
+  .topbar-actions { gap: 5px; flex-shrink: 0; }
+  .btn-add { padding: 6px 10px; font-size: 0.78rem; gap: 4px; }
+
+  /* Botones de texto opcionales: ocultar label en pantallas muy pequeñas */
+  @media (max-width: 480px) {
+    .btn-add-label { display: none; }
+  }
+
+  /* Tabla de notas: scroll horizontal + celdas compactas */
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .grade-table { font-size: 0.82rem; }
+  .grade-val { font-size: 0.75rem; line-height: 36px; }
+  .grade-cell { height: 36px; }
+  .student-name-wrap { height: 36px; }
+  .td-name { padding: 0 6px 0 10px; }
+  .student-name { font-size: 0.82rem; }
+
+  /* Stats panel: comprimido, scroll si no cabe */
+  .stats-panel { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .stat-card { padding: 8px 12px; min-width: 70px; }
+  .stat-num { font-size: 1.5rem; }
+  .stat-label { font-size: 0.65rem; }
+  .stat-sub { font-size: 0.72rem; }
+
+  /* Overview: 2 columnas */
+  .overview-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px; padding: 14px;
+  }
+  .ov-avg { font-size: 1.5rem; }
+
+  /* Modal: ancho casi completo */
+  .modal { width: min(96vw, 420px); }
+  .modal-body { max-height: 58vh; padding: 14px; }
+  .modal-header { padding: 13px 16px; }
+  .modal-footer { padding: 12px 16px; }
+
+  /* Toast: más arriba para no tapar contenido */
+  .toast { bottom: 14px; font-size: 0.82rem; padding: 8px 16px; white-space: normal; text-align: center; max-width: 90vw; }
+
+  /* Backup banner: apilado */
+  .backup-banner { flex-wrap: wrap; padding: 8px 14px; font-size: 0.8rem; }
+
+  /* Deudores */
+  .deudores-body { padding: 12px 14px 32px; }
+  .deudor-subject-lbl { min-width: 0; }
+
+  /* Observaciones: dos paneles apilados verticalmente */
+  .obs-layout { flex-direction: column; }
+  .obs-left-panel {
+    width: 100%; min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 190px;
+  }
+  .obs-right-panel { flex: 1; min-height: 0; }
+
+  /* Gestionar Clases: panel de asignaturas debajo */
+  .mc-body { flex-direction: column; }
+  .mc-subjects-panel {
+    width: 100%; border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: 220px;
+  }
+
+  /* Taller / Observaciones: padding reducido */
+  .taller-body { padding: 12px 14px 32px; }
+  .obs-body    { padding: 12px 14px 32px; }
+  .rec-wrap    { padding: 14px 16px; }
+
+  /* Asistencia */
+  .att-wrap { padding: 0 14px 14px; }
+  .att-btn  { min-width: 34px; height: 30px; font-size: 0.74rem; }
+
+  /* Tour tooltip: siempre centrado en mobile */
+  #tour-tooltip {
+    width: calc(100vw - 24px) !important;
+    left: 12px !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+  }
+  #tour-tooltip.tour-centered {
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+  }
+
+  /* KPI dashboard */
+  .dash-kpi-bar { padding: 10px 14px 6px; gap: 8px; }
+  .dash-kpi { padding: 8px 14px; }
+  .dash-kpi-val { font-size: 1.3rem; }
+
+  /* Sidebar footer: botones más grandes para touch */
+  .sb-btn { padding: 9px 8px; font-size: 0.78rem; }
+  .sb-backup-row .sb-btn { font-size: 0.72rem; }
+}
+
 /* ── Print / Reportes PDF ─────────────────────────────────────────────────── */
 .print-header { display: none; }
 
