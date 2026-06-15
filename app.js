@@ -3012,14 +3012,17 @@ class GradeBook {
   _renderSchoolBrand() {
     const { schoolName, schoolPlace, schoolLogo } = this.state;
     const isNew = !schoolName && !schoolLogo;
-    const displayName  = schoolName  || 'Mi Colegio';
-    const displayPlace = schoolPlace || (isNew ? 'Toca para personalizar' : '');
+
+    if (isNew) {
+      return `
+        <div class="sb-school-brand sb-school-editable" data-action="edit-school" title="Agregar logo y nombre del colegio">
+          <span class="sb-school-add-hint">＋ Agregar mi colegio</span>
+        </div>`;
+    }
 
     const logoHtml = schoolLogo
       ? `<img src="${schoolLogo}" alt="Logo colegio" class="sb-school-logo">`
-      : `<img src="./logo-colegio.png" alt="Logo colegio" class="sb-school-logo"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-         <div class="sb-school-fallback${isNew ? ' sb-school-fallback-new' : ''}" style="display:none">
+      : `<div class="sb-school-fallback" style="display:flex">
            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" style="opacity:.7">
              <path d="M11 2L3 7v1h16V7L11 2z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/>
              <rect x="5" y="8" width="12" height="12" rx="1" stroke="white" stroke-width="1.4"/>
@@ -3029,14 +3032,14 @@ class GradeBook {
          </div>`;
 
     return `
-      <div class="sb-school-brand sb-school-editable${isNew ? ' sb-school-new' : ''}" data-action="edit-school" title="Editar información del colegio">
+      <div class="sb-school-brand sb-school-editable" data-action="edit-school" title="Editar información del colegio">
         <div class="sb-school-logo-wrap">
           ${logoHtml}
           <div class="sb-school-edit-overlay">✎</div>
         </div>
         <div class="sb-school-info">
-          <span class="sb-school-name${isNew ? ' sb-school-name-new' : ''}">${this._esc(displayName)}</span>
-          ${displayPlace ? `<span class="sb-school-place${isNew ? ' sb-school-place-new' : ''}">${this._esc(displayPlace)}</span>` : ''}
+          <span class="sb-school-name">${this._esc(schoolName)}</span>
+          ${schoolPlace ? `<span class="sb-school-place">${this._esc(schoolPlace)}</span>` : ''}
         </div>
       </div>`;
   }

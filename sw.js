@@ -1,4 +1,4 @@
-const CACHE = 'libro-notas-v21';
+const CACHE = 'libro-notas-v23';
 const SHELL  = [
   './',
   './index.html',

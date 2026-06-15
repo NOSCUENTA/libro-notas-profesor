@@ -1428,6 +1428,12 @@ tfoot tr {
 /* Editable */
 .sb-school-editable { cursor: pointer; border-radius: 8px; transition: background 0.15s; }
 .sb-school-editable:hover { background: rgba(255,255,255,0.06); }
+.sb-school-add-hint {
+  font-size: 0.75rem; color: rgba(255,255,255,0.3);
+  letter-spacing: 0.02em; padding: 4px 2px;
+  transition: color 0.15s;
+}
+.sb-school-editable:hover .sb-school-add-hint { color: rgba(255,255,255,0.6); }
 .sb-school-logo-wrap { position: relative; flex-shrink: 0; width: 44px; height: 44px; }
 .sb-school-edit-overlay {
   position: absolute; inset: 0;
