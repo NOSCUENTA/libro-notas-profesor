@@ -1,9 +1,9 @@
-const CACHE = 'libro-notas-v23';
+const CACHE = 'libro-notas-v24';
 const SHELL  = [
   './',
   './index.html',
-  './app.js?v=20',
-  './styles.css?v=20',
+  './app.js?v=24',
+  './styles.css?v=24',
   './logo-colegio.png',
   './manifest.json',
 ];

@@ -1429,11 +1429,18 @@ tfoot tr {
 .sb-school-editable { cursor: pointer; border-radius: 8px; transition: background 0.15s; }
 .sb-school-editable:hover { background: rgba(255,255,255,0.06); }
 .sb-school-add-hint {
-  font-size: 0.75rem; color: rgba(255,255,255,0.3);
-  letter-spacing: 0.02em; padding: 4px 2px;
-  transition: color 0.15s;
+  display: block; width: 100%;
+  font-size: 0.78rem; color: rgba(255,255,255,0.45);
+  letter-spacing: 0.02em; padding: 7px 10px;
+  border: 1px dashed rgba(255,255,255,0.18);
+  border-radius: 7px; text-align: center;
+  transition: all 0.15s;
 }
-.sb-school-editable:hover .sb-school-add-hint { color: rgba(255,255,255,0.6); }
+.sb-school-editable:hover .sb-school-add-hint {
+  color: rgba(255,255,255,0.75);
+  border-color: rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.05);
+}
 .sb-school-logo-wrap { position: relative; flex-shrink: 0; width: 44px; height: 44px; }
 .sb-school-edit-overlay {
   position: absolute; inset: 0;
